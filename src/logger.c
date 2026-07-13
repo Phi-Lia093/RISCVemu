@@ -1,8 +1,4 @@
-#include <logger.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <stdarg.h>
+#include <emu.h>
 
 char level;
 FILE *file_output;
