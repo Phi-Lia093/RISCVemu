@@ -5,15 +5,15 @@
 
 #include <mem.h>
 
-uint8_t *main_mem;
+uint8_t *g_main_mem;
 
 void
 init_mem(void)
 {
-    main_mem = (uint8_t *)calloc(1, MEM_SIZE);
+    g_main_mem = (uint8_t *)calloc(1, MEM_SIZE);
     // activate page
-    memset(main_mem, 0x5A, MEM_SIZE);
-    memset(main_mem, 0, MEM_SIZE);
+    memset(g_main_mem, 0x5A, MEM_SIZE);
+    memset(g_main_mem, 0, MEM_SIZE);
 }
 
 // TODO: add ALIGN and OVERFLOW exception
@@ -26,7 +26,7 @@ mem_read8_unsigned(uint32_t addr)
         // E
         return 0;
     }
-    return (uint32_t)main_mem[addr];
+    return (uint32_t)g_main_mem[addr];
 }
 
 uint32_t
@@ -41,7 +41,7 @@ mem_read16_unsigned(uint32_t addr)
     {
         // ALIGN
     }
-    return (uint32_t)main_mem[addr] | ((uint32_t)main_mem[addr + 1] << 8);
+    return (uint32_t)g_main_mem[addr] | ((uint32_t)g_main_mem[addr + 1] << 8);
 }
 
 uint32_t
@@ -56,9 +56,9 @@ mem_read32_unsigned(uint32_t addr)
     {
         // ALIGN
     }
-    return (uint32_t)main_mem[addr] | ((uint32_t)main_mem[addr + 1] << 8)
-           | ((uint32_t)main_mem[addr + 2] << 16)
-           | ((uint32_t)main_mem[addr + 3] << 24);
+    return (uint32_t)g_main_mem[addr] | ((uint32_t)g_main_mem[addr + 1] << 8)
+           | ((uint32_t)g_main_mem[addr + 2] << 16)
+           | ((uint32_t)g_main_mem[addr + 3] << 24);
 }
 
 int32_t
@@ -69,7 +69,7 @@ mem_read8_signed(uint32_t addr)
         // E
         return 0;
     }
-    return (int32_t)(int8_t)main_mem[addr];
+    return (int32_t)(int8_t)g_main_mem[addr];
 }
 
 int32_t
@@ -84,7 +84,7 @@ mem_read16_signed(uint32_t addr)
     {
         // ALIGN
     }
-    uint16_t val = (uint16_t)(main_mem[addr] | (main_mem[addr + 1] << 8));
+    uint16_t val = (uint16_t)(g_main_mem[addr] | (g_main_mem[addr + 1] << 8));
     return (int32_t)(int16_t)val;
 }
 
@@ -100,9 +100,9 @@ mem_read32_signed(uint32_t addr)
     {
         // ALIGN
     }
-    return (uint32_t)main_mem[addr] | ((uint32_t)main_mem[addr + 1] << 8)
-           | ((uint32_t)main_mem[addr + 2] << 16)
-           | ((uint32_t)main_mem[addr + 3] << 24);
+    return (uint32_t)g_main_mem[addr] | ((uint32_t)g_main_mem[addr + 1] << 8)
+           | ((uint32_t)g_main_mem[addr + 2] << 16)
+           | ((uint32_t)g_main_mem[addr + 3] << 24);
 }
 
 void
@@ -113,7 +113,7 @@ mem_write8(uint32_t addr, uint8_t val)
         // E
         return;
     }
-    main_mem[addr] = val;
+    g_main_mem[addr] = val;
 }
 
 void
@@ -124,8 +124,8 @@ mem_write16(uint32_t addr, uint16_t val)
         // E
         return;
     }
-    main_mem[addr] = val & 0xFF;
-    main_mem[addr + 1] = (val >> 8) & 0xFF;
+    g_main_mem[addr] = val & 0xFF;
+    g_main_mem[addr + 1] = (val >> 8) & 0xFF;
 }
 
 void
@@ -136,10 +136,10 @@ mem_write32(uint32_t addr, uint32_t val)
         // E
         return;
     }
-    main_mem[addr] = val & 0xFF;
-    main_mem[addr + 1] = (val >> 8) & 0xFF;
-    main_mem[addr + 2] = (val >> 16) & 0xFF;
-    main_mem[addr + 3] = (val >> 24) & 0xFF;
+    g_main_mem[addr] = val & 0xFF;
+    g_main_mem[addr + 1] = (val >> 8) & 0xFF;
+    g_main_mem[addr + 2] = (val >> 16) & 0xFF;
+    g_main_mem[addr + 3] = (val >> 24) & 0xFF;
 }
 
 bool

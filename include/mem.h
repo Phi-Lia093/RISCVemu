@@ -8,6 +8,6 @@
 void
 init_mem(void);
 
-extern uint8_t *main_mem;
+extern uint8_t *g_main_mem;
 
 #endif

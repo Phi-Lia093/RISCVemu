@@ -9,4 +9,6 @@ struct machine_state
     uint32_t pc;
 };
 
+extern struct machine_state g_state;
+
 #endif
