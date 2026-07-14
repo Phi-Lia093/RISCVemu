@@ -1,0 +1,29 @@
+BasedOnStyle: GNU
+
+ColumnLimit: 80
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+BreakBeforeBraces: Allman
+
+PointerAlignment: Right
+
+AlwaysBreakAfterReturnType: TopLevel
+
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+SpaceBeforeParens: ControlStatements
+
+AlignConsecutiveAssignments: false
+AlignConsecutiveMacros: false
+
+SortIncludes: true
+
+AccessModifierOffset: -4

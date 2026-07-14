@@ -1,12 +1,13 @@
 #ifndef MEM_H
 #define MEM_H
 
-#include <emu.h>
+#include <stdint.h>
 
-#define MEM_SIZE 1*1024*1024*1024L
+#define MEM_SIZE 1 * 1024 * 1024 * 1024L
 
-void init_mem(void);
+void
+init_mem(void);
 
-extern uint8_t* main_mem;
+extern uint8_t *main_mem;
 
 #endif

@@ -40,3 +40,10 @@ add_custom_target(run
     DEPENDS ${PROJECT_NAME}
     VERBATIM
 )
+
+add_custom_target(tidy
+    COMMAND find ./src -name "*.c" -o -name "*.h" | parallel -j 8 clang-format -i {}
+    COMMAND find ./include -name "*.c" -o -name "*.h" | parallel -j 8 clang-format -i {}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    VERBATIM
+)
