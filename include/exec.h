@@ -1,5 +1,5 @@
-#ifndef OP_H
-#define OP_H
+#ifndef EXEC_H
+#define EXEC_H
 
 #include <stdint.h>
 
@@ -38,6 +38,10 @@ get_funct7(uint32_t ins)
 {
     return (ins >> 25) & 0x7F;
 }
+
+uint32_t reg_read(uint32_t id);
+
+void reg_write(uint32_t id, uint32_t d);
 
 struct r_op
 {

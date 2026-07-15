@@ -7,12 +7,20 @@ set(CMAKE_C_EXTENSIONS ON)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic")
 
+find_package(Curses REQUIRED)
+
 file(GLOB_RECURSE SOURCES 
     "src/*.c"
 )
 
 include_directories(
-    include/
+    ${CURSES_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/include/
+)
+
+link_libraries(
+    ${CURSES_LIBRARIES}
+    m
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

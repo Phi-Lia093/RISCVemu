@@ -10,7 +10,7 @@ BreakBeforeBraces: Allman
 
 PointerAlignment: Right
 
-AlwaysBreakAfterReturnType: TopLevel
+AlwaysBreakAfterReturnType: None
 
 AllowShortFunctionsOnASingleLine: Inline
 AllowShortIfStatementsOnASingleLine: true
