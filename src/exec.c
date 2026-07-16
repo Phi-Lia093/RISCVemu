@@ -196,7 +196,6 @@ exec(uint32_t ins)
 
         if (funct3 == 1 || funct3 == 5)
         {
-            uint32_t shamt = imm & 0x1F;
             if (funct3 == 1 && (imm & 0xFE0) != 0)
             {
                 error("invalid SLLI shamt");

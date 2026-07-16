@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include <mem.h>
+#include <logger.h>
 
 uint8_t *g_main_mem;
 
@@ -88,21 +89,23 @@ mem_read16_signed(uint32_t addr)
     return (int32_t)(int16_t)val;
 }
 
-uint32_t
+int32_t
 mem_read32_signed(uint32_t addr)
-{ // the same as mem_read_32_unsinged as 32bit has no extend problem
+{
     if (addr >= MEM_SIZE - 3)
     {
-        // E
+        error("memory read out of bounds");
         return 0;
     }
     if (addr & 0x3)
     {
-        // ALIGN
+        error("misaligned memory access");
+        return 0;
     }
-    return (uint32_t)g_main_mem[addr] | ((uint32_t)g_main_mem[addr + 1] << 8)
-           | ((uint32_t)g_main_mem[addr + 2] << 16)
-           | ((uint32_t)g_main_mem[addr + 3] << 24);
+    return (int32_t)((uint32_t)g_main_mem[addr] | 
+                     ((uint32_t)g_main_mem[addr + 1] << 8) |
+                     ((uint32_t)g_main_mem[addr + 2] << 16) |
+                     ((uint32_t)g_main_mem[addr + 3] << 24));
 }
 
 void

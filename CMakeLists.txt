@@ -27,18 +27,13 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+add_custom_target(mktest
     COMMAND ${CMAKE_SOURCE_DIR}/test/mktest.sh
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    ${CMAKE_SOURCE_DIR}/test/test.bin
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
     COMMENT "Running test/mktest.sh"
-    VERBATIM
-)
-
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_SOURCE_DIR}/test/test.bin
-        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
-    COMMENT "Copying test.bin to output directory"
     VERBATIM
 )
 
