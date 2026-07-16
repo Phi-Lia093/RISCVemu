@@ -9,7 +9,7 @@
 #include <logger.h>
 #include <mem.h>
 
-#define PROGRAM_BASE 0x1000  // RISC-V通常从0x1000开始
+#define PROGRAM_BASE 0
 #define PROGRAM_NAME "test.bin"
 
 struct machine_state g_state;
@@ -64,6 +64,7 @@ main(void)
         
     }
 
+    info("terminated");
     info("PC=0x%x", g_state.pc);
     
     terminate_logger();
