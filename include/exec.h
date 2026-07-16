@@ -43,57 +43,6 @@ uint32_t reg_read(uint32_t id);
 
 void reg_write(uint32_t id, uint32_t d);
 
-struct r_op
-{
-    uint32_t opcode;
-    uint32_t rd;
-    uint32_t funct_3;
-    uint32_t rs1;
-    uint32_t rs2;
-    uint32_t funct_7;
-};
-
-struct i_op
-{
-    uint32_t opcode;
-    uint32_t rd;
-    uint32_t funct_3;
-    uint32_t rs1;
-    uint32_t imm;
-};
-
-struct s_op
-{
-    uint32_t opcode;
-    uint32_t rd;
-    uint32_t funct_3;
-    uint32_t rs1;
-    uint32_t rs2;
-    uint32_t imm;
-};
-
-struct b_op
-{
-    uint32_t opcode;
-    uint32_t rd;
-    uint32_t funct_3;
-    uint32_t rs1;
-    uint32_t rs2;
-    uint32_t imm;
-};
-
-struct u_op
-{
-    uint32_t opcode;
-    uint32_t rd;
-    uint32_t imm;
-};
-
-struct j_op
-{
-    uint32_t opcode;
-    uint32_t rd;
-    uint32_t imm;
-};
+void exec(uint32_t ins);
 
 #endif

@@ -4,6 +4,7 @@
 #include <sys/mman.h>
 
 #include <emu.h>
+#include <exec.h>
 #include <fmap.h>
 #include <logger.h>
 #include <mem.h>
