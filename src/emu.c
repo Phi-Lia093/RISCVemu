@@ -66,6 +66,7 @@ main(void)
 
     info("terminated");
     info("PC=0x%x", g_state.pc);
+    info("MEM=0x%x", mem_read32_unsigned(0x1000));
     
     terminate_logger();
     return 0;

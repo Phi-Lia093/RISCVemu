@@ -137,7 +137,7 @@ exec(uint32_t ins)
 
     case 0b0010011:
     {
-        uint32_t imm = (ins >> 20) & 0xFFF;
+        uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
         uint32_t shamt = imm & 0x1F;
 
         if (funct3 == 1)
@@ -223,7 +223,7 @@ exec(uint32_t ins)
 
     case 0b1110011:
     {
-        uint32_t imm = (ins >> 20) & 0xFFF;
+        uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
 
         if (funct3 == 0)
         {
