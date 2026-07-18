@@ -6,7 +6,7 @@
 #include <logger.h>
 
 void *
-map_file(char *path, size_t *length, int pm)
+map_file(const char *path, size_t *length, int pm)
 {
     int fd = open(path, O_RDONLY);
     if (fd < 0)

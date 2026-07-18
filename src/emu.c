@@ -1,5 +1,8 @@
+#include <getopt.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 
@@ -10,52 +13,143 @@
 #include <logger.h>
 #include <mem.h>
 
-#define PROGRAM_BASE 0
-#define PROGRAM_NAME "test.bin"
-
 struct machine_state g_state;
 
-void
-load_program(void)
+static void
+print_usage(const char *prog_name)
 {
-    size_t len;
-    uint8_t *addr
-        = (uint8_t *)map_file(PROGRAM_NAME, &len, PROT_READ | PROT_WRITE);
-    if (!addr)
-    {
-        error("failed to load program: %s", PROGRAM_NAME);
-        return;
-    }
+    fprintf(stderr,
+            "Usage: %s <program_file> <program_base> [options]\n"
+            "Options:\n"
+            "  -d, --debug         Enable single-step debug mode\n"
+            "  -b, --breakpoint    Set breakpoint address (hex format, e.g., "
+            "0x1000)\n"
+            "  -h, --help          Show this help message\n"
+            "\n"
+            "Example:\n"
+            "  %s test.bin 0x1000 -d -b 0x1200\n",
+            prog_name, prog_name);
+}
 
-    if (len > MEM_SIZE - PROGRAM_BASE)
-    {
-        error("program too large");
-        munmap(addr, len);
-        return;
-    }
+static int
+parse_hex(const char *str, uint32_t *result)
+{
+    char *endptr;
+    unsigned long val = strtoul(str, &endptr, 0);
 
-    memcpy(g_main_mem + PROGRAM_BASE, addr, len);
-    info("loaded %zu bytes to 0x%x", len, PROGRAM_BASE);
-    munmap(addr, len);
+    if (*endptr != '\0' || endptr == str) return -1;
+
+    *result = (uint32_t)val;
+    return 0;
 }
 
 int
-main(void)
+main(int argc, char **argv)
 {
-    init_logger(INFO, NULL);
+    int opt;
+    int debug_mode = 0;
+    uint32_t breakpoint = 0;
+    int breakpoint_set = 0;
+    uint32_t program_base;
+    const char *program_name;
+
+    static struct option long_options[]
+        = { { "debug", no_argument, 0, 'd' },
+            { "breakpoint", required_argument, 0, 'b' },
+            { "help", no_argument, 0, 'h' },
+            { 0, 0, 0, 0 } };
+
+    while ((opt = getopt_long(argc, argv, "db:h", long_options, NULL)) != -1)
+    {
+        switch (opt)
+        {
+        case 'd':
+            debug_mode = 1;
+            break;
+
+        case 'b':
+            if (parse_hex(optarg, &breakpoint) != 0)
+            {
+                fprintf(stderr, "Error: Invalid breakpoint address: %s\n",
+                        optarg);
+                return 1;
+            }
+            breakpoint_set = 1;
+            break;
+
+        case 'h':
+            print_usage(argv[0]);
+            return 0;
+
+        default:
+            print_usage(argv[0]);
+            return 1;
+        }
+    }
+
+    if (optind + 2 > argc)
+    {
+        fprintf(stderr, "Error: Missing required arguments\n");
+        print_usage(argv[0]);
+        return 1;
+    }
+
+    program_name = argv[optind];
+    if (parse_hex(argv[optind + 1], &program_base) != 0)
+    {
+        fprintf(stderr, "Error: Invalid program base address: %s\n",
+                argv[optind + 1]);
+        return 1;
+    }
+
+    init_logger(debug_mode ? DEBUG : INFO, NULL);
     info("RISC-V Emulator starting...");
+    info("Program: %s", program_name);
+    info("Base address: 0x%x", program_base);
+    if (breakpoint_set) info("Breakpoint: 0x%x", breakpoint);
 
     init_mem();
-    load_program();
+
+    size_t len;
+    uint8_t *addr
+        = (uint8_t *)map_file(program_name, &len, PROT_READ | PROT_WRITE);
+    if (!addr)
+    {
+        error("failed to load program: %s", program_name);
+        terminate_logger();
+        return 1;
+    }
+
+    if (program_base + len > MEM_SIZE)
+    {
+        error("program too large for memory (base=0x%x, size=%zu, max=0x%x)",
+              program_base, len, MEM_SIZE);
+        munmap(addr, len);
+        terminate_logger();
+        return 1;
+    }
+
+    memcpy(g_main_mem + program_base, addr, len);
+    info("loaded %zu bytes to 0x%x", len, program_base);
+    munmap(addr, len);
 
     init_debugger();
 
     memset(&g_state, 0, sizeof(g_state));
-    g_state.pc = PROGRAM_BASE;
+    g_state.pc = program_base;
     g_state.terminated = 0;
-    g_state.single_step = 1;
-    g_state.breakpoint = 0xDEADBEEF;
-    g_state.breakpoint_enabled = 0;
+    g_state.single_step = debug_mode;
+
+    if (breakpoint_set)
+    {
+        g_state.breakpoint = breakpoint;
+        g_state.breakpoint_enabled = 1;
+    }
+    else
+    {
+        g_state.breakpoint = 0xDEADBEEF;
+        g_state.breakpoint_enabled = 0;
+    }
 
     info("starting execution at PC=0x%x", g_state.pc);
 
@@ -66,6 +160,7 @@ main(void)
             error("PC out of bounds: 0x%x", g_state.pc);
             break;
         }
+
         if (g_state.breakpoint_enabled && g_state.pc == g_state.breakpoint)
         {
             info("breakpoint hit at PC=0x%x", g_state.pc);
@@ -81,13 +176,13 @@ main(void)
         {
             break;
         }
+
         uint32_t ins = mem_read32_unsigned(g_state.pc);
-
         exec(ins);
-
         g_state.pc += 4;
     }
 
+    info("Execution terminated. Return value: 0x%x", g_state.gpr[10]);
     terminate_logger();
     return 0;
 }

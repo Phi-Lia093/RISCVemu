@@ -1,6 +1,7 @@
 void
 _start(void) __attribute__((section(".text._start")));
-void
+
+int
 _main();
 
 void
@@ -8,16 +9,12 @@ _start(void)
 {
     __asm__ volatile("la sp, _stack_top\n");
     _main();
+    __asm__ volatile("ecall\n");
     while (1);
 }
 
-void
+int
 _main()
 {
-    unsigned int i = 1;
-    for(int i=0;i<10000;i++);
-    int *p = (int*)0x1000;
-    p[0] = 0xABCDEFEF;
-    __asm__ volatile("ebreak\n");
-    __asm__ volatile("ecall\n");
+    return 0x325;
 }

@@ -4,13 +4,14 @@
 #include <string.h>
 
 #include <debugger.h>
+#include <disasm.h>
 #include <emu.h>
 #include <mem.h>
 
-// Command history cache
 static char last_cmd[256] = { 0 };
 
-// Forward declarations of static command handlers
+static int show_disasm = 1; // 1 = show disassembly, 0 = show raw hex
+
 static void cmd_single_step(void);
 static void cmd_continue(void);
 static void cmd_quit(void);
@@ -23,11 +24,14 @@ static void cmd_dump_range(char *args);
 static void cmd_breakpoint_set(char *args);
 static void cmd_breakpoint_clear(void);
 static void cmd_help(void);
+static void cmd_disasm(char *args);
+static void cmd_toggle_disasm(void);
 
 void
 init_debugger(void)
 {
     last_cmd[0] = '\0';
+    show_disasm = 1;
 }
 
 static void
@@ -41,35 +45,30 @@ print_registers(void)
     }
 }
 
-// Command: s/n - Single step
 static void
 cmd_single_step(void)
 {
     g_state.single_step = 1;
 }
 
-// Command: c - Continue execution
 static void
 cmd_continue(void)
 {
     g_state.single_step = 0;
 }
 
-// Command: q - Quit emulator
 static void
 cmd_quit(void)
 {
     g_state.terminated = 1;
 }
 
-// Command: r - Print registers
 static void
 cmd_registers(void)
 {
     print_registers();
 }
 
-// Command: m <addr> [addr2] ... - Display memory at address(es)
 static void
 cmd_memory(char *args)
 {
@@ -96,7 +95,6 @@ cmd_memory(char *args)
     }
 }
 
-// Command: w <addr> <value> [value2] ... - Write to memory
 static void
 cmd_write(char *args)
 {
@@ -132,8 +130,6 @@ cmd_write(char *args)
     }
 }
 
-// Command: B <addr> [count] - Dump bytes (uppercase B to avoid conflict with
-// breakpoint)
 static void
 cmd_dump_bytes(char *args)
 {
@@ -146,15 +142,20 @@ cmd_dump_bytes(char *args)
         return;
     }
 
-    for (int i = 0; i < count && i < 64; i++)
+    if (count > 256) count = 256;
+
+    for (int i = 0; i < count; i++)
     {
-        if (i % 8 == 0) printf("\n0x%08x: ", addr + i);
+        if (i % 8 == 0)
+        {
+            if (i > 0) printf("\n");
+            printf("0x%08x: ", addr + i);
+        }
         printf("%02x ", mem_read8_unsigned(addr + i));
     }
     printf("\n");
 }
 
-// Command: S <addr> - Print string from address
 static void
 cmd_string(char *args)
 {
@@ -176,7 +177,6 @@ cmd_string(char *args)
     }
 }
 
-// Command: d <start> <end> - Dump memory range
 static void
 cmd_dump_range(char *args)
 {
@@ -195,7 +195,49 @@ cmd_dump_range(char *args)
     }
 }
 
-// Command: b <addr> - Set breakpoint
+static void
+cmd_disasm(char *args)
+{
+    uint32_t addr;
+    int count = 1;
+
+    char *token = strtok(args, " \t\n");
+    if (!token)
+    {
+        addr = g_state.pc;
+    }
+    else if (sscanf(token, "%x", &addr) != 1)
+    {
+        printf("usage: u <address> [count]\n");
+        return;
+    }
+
+    token = strtok(NULL, " \t\n");
+    if (token)
+    {
+        sscanf(token, "%d", &count);
+        if (count < 1) count = 1;
+        if (count > 32) count = 32;
+    }
+
+    printf("Disassembly from 0x%08x (%d instruction%s):\n", addr, count,
+           count > 1 ? "s" : "");
+    for (int i = 0; i < count; i++)
+    {
+        uint32_t ins = mem_read32_unsigned(addr);
+        char *disasm_str = disasm(ins);
+        printf("0x%08x:  %08x  %s\n", addr, ins, disasm_str);
+        addr += 4;
+    }
+}
+
+static void
+cmd_toggle_disasm(void)
+{
+    show_disasm = !show_disasm;
+    printf("Disassembly display: %s\n", show_disasm ? "ON" : "OFF (raw hex)");
+}
+
 static void
 cmd_breakpoint_set(char *args)
 {
@@ -213,7 +255,6 @@ cmd_breakpoint_set(char *args)
     }
 }
 
-// Command: C - Clear breakpoint
 static void
 cmd_breakpoint_clear(void)
 {
@@ -221,7 +262,6 @@ cmd_breakpoint_clear(void)
     printf("Breakpoint cleared\n");
 }
 
-// Command: h/? - Help
 static void
 cmd_help(void)
 {
@@ -236,18 +276,28 @@ cmd_help(void)
     printf("  B <a> [c]   - Dump bytes from address (count default=16)\n");
     printf("  S <addr>    - Print string from address\n");
     printf("  w <a> <v>   - Write value(s) to memory\n");
+    printf("  u <a> [c]   - Disassemble instructions (default: PC, count=1)\n");
+    printf("  D           - Toggle disassembly/raw hex display\n");
     printf("  b <addr>    - Set breakpoint\n");
     printf("  C           - Clear breakpoint\n");
     printf("  h/?         - This help\n");
     printf("  <Enter>     - Repeat last command\n");
 }
 
-// Main debugger tick function
 void
 tick_debugger(void)
 {
     uint32_t ins = mem_read32_unsigned(g_state.pc);
-    printf("0x%08x: %08x\n", g_state.pc, ins);
+
+    if (show_disasm)
+    {
+        char *disasm_str = disasm(ins);
+        printf("0x%08x:  %08x  %s\n", g_state.pc, ins, disasm_str);
+    }
+    else
+    {
+        printf("0x%08x: %08x\n", g_state.pc, ins);
+    }
 
     while (1)
     {
@@ -259,20 +309,17 @@ tick_debugger(void)
             break;
         }
 
-        // Remove trailing newline
         size_t len = strlen(line);
         if (len > 0 && line[len - 1] == '\n')
         {
             line[len - 1] = '\0';
         }
 
-        // If empty line (just Enter), use last command
         char *p = line;
         while (*p && isspace(*p)) p++;
 
         if (!*p)
         {
-            // Empty line - repeat last command
             if (last_cmd[0] != '\0')
             {
                 strcpy(line, last_cmd);
@@ -282,19 +329,17 @@ tick_debugger(void)
             }
             else
             {
-                continue; // No previous command
+                continue;
             }
         }
         else
         {
-            // Save this command for later repeat
             strcpy(last_cmd, line);
         }
 
         char cmd = *p++;
         char *args = p;
 
-        // Skip leading whitespace in args
         while (*args && isspace(*args)) args++;
 
         switch (cmd)
@@ -334,6 +379,14 @@ tick_debugger(void)
 
         case 'd':
             cmd_dump_range(args);
+            continue;
+
+        case 'u':
+            cmd_disasm(args);
+            continue;
+
+        case 'D':
+            cmd_toggle_disasm();
             continue;
 
         case 'b':
