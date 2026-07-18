@@ -1,5 +1,5 @@
 void
-_start(void) __attribute__((naked)) __attribute__((section(".text._start")));
+_start(void) __attribute__((section(".text._start")));
 void
 _main();
 
@@ -19,4 +19,5 @@ _main()
     int *p = (int*)0x1000;
     p[0] = 0xABCDEFEF;
     __asm__ volatile("ebreak\n");
+    __asm__ volatile("ecall\n");
 }

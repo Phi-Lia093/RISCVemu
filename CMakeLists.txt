@@ -4,12 +4,13 @@ project(RISCVemu C)
 set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic -O3")
 
 find_package(Curses REQUIRED)
 
-file(GLOB_RECURSE SOURCES 
+file(GLOB_RECURSE SOURCES
     "src/*.c"
 )
 

@@ -7,7 +7,10 @@ struct machine_state
 {
     uint32_t gpr[32];
     uint32_t pc;
-    int halted;
+    int single_step;
+    int terminated;
+    uint32_t breakpoint;
+    uint32_t breakpoint_enabled;
 };
 
 extern struct machine_state g_state;

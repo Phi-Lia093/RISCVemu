@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <stdio.h>
 
 #include <emu.h>
 #include <exec.h>
@@ -58,11 +57,8 @@ static void (*i_alu_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
 };
 
 static void (*i_mem_ins_optable[8])(uint32_t, uint32_t, uint32_t) = {
-    [0] = &insi_i_lb,
-    [1] = &insi_i_lh,
-    [2] = &insi_i_lw,
-    [4] = &insi_i_lbu,
-    [5] = &insi_i_lhu,
+    [0] = &insi_i_lb,  [1] = &insi_i_lh,  [2] = &insi_i_lw,
+    [4] = &insi_i_lbu, [5] = &insi_i_lhu,
 };
 
 static void (*s_mem_ins_optable[8])(uint32_t, uint32_t, uint32_t) = {
@@ -72,12 +68,8 @@ static void (*s_mem_ins_optable[8])(uint32_t, uint32_t, uint32_t) = {
 };
 
 static void (*b_ins_optable[8])(uint32_t, uint32_t, uint32_t) = {
-    [0] = &insi_b_beq,
-    [1] = &insi_b_bne,
-    [4] = &insi_b_blt,
-    [5] = &insi_b_bge,
-    [6] = &insi_b_bltu,
-    [7] = &insi_b_bgeu,
+    [0] = &insi_b_beq, [1] = &insi_b_bne,  [4] = &insi_b_blt,
+    [5] = &insi_b_bge, [6] = &insi_b_bltu, [7] = &insi_b_bgeu,
 };
 
 uint32_t

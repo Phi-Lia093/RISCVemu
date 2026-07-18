@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <mem.h>
 #include <logger.h>
+#include <mem.h>
 
 uint8_t *g_main_mem;
 
@@ -102,10 +102,10 @@ mem_read32_signed(uint32_t addr)
         error("misaligned memory access");
         return 0;
     }
-    return (int32_t)((uint32_t)g_main_mem[addr] | 
-                     ((uint32_t)g_main_mem[addr + 1] << 8) |
-                     ((uint32_t)g_main_mem[addr + 2] << 16) |
-                     ((uint32_t)g_main_mem[addr + 3] << 24));
+    return (int32_t)((uint32_t)g_main_mem[addr]
+                     | ((uint32_t)g_main_mem[addr + 1] << 8)
+                     | ((uint32_t)g_main_mem[addr + 2] << 16)
+                     | ((uint32_t)g_main_mem[addr + 3] << 24));
 }
 
 void
