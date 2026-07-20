@@ -72,22 +72,6 @@ static void (*b_ins_optable[8])(uint32_t, uint32_t, uint32_t) = {
     [5] = &insi_b_bge, [6] = &insi_b_bltu, [7] = &insi_b_bgeu,
 };
 
-uint32_t
-reg_read(uint32_t id)
-{
-    if (id == 0) return 0;
-    if (id > 31) error("register index out of bound READ");
-    return g_state.gpr[id];
-}
-
-void
-reg_write(uint32_t id, uint32_t d)
-{
-    if (id == 0) return;
-    if (id > 31) error("register index out of bound WRITE");
-    g_state.gpr[id] = d;
-}
-
 static inline uint32_t
 sign_extend_12(uint32_t imm)
 {

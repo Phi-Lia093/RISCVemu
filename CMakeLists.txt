@@ -8,19 +8,16 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic -O3")
 
-find_package(Curses REQUIRED)
 
 file(GLOB_RECURSE SOURCES
     "src/*.c"
 )
 
 include_directories(
-    ${CURSES_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/include/
 )
 
 link_libraries(
-    ${CURSES_LIBRARIES}
     m
 )
 
@@ -39,7 +36,7 @@ add_custom_target(mktest
 )
 
 add_custom_target(run
-    COMMAND ./RISCVemu
+    COMMAND ./RISCVemu test.bin 0
     WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
     DEPENDS ${PROJECT_NAME}
     VERBATIM

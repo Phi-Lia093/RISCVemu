@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+#include <emu.h>
+
+
 static inline uint32_t
 get_opcode(uint32_t ins)
 {
@@ -39,9 +42,21 @@ get_funct7(uint32_t ins)
     return (ins >> 25) & 0x7F;
 }
 
-uint32_t reg_read(uint32_t id);
+static inline uint32_t
+reg_read(uint32_t id)
+{
+    if (id == 0) return 0;
+    if (unlikely(id > 31)) return 0;
+    return g_state.gpr[id];
+}
 
-void reg_write(uint32_t id, uint32_t d);
+static inline void
+reg_write(uint32_t id, uint32_t d)
+{
+    if (unlikely(id == 0)) return;
+    if (unlikely(id > 31)) return;
+    g_state.gpr[id] = d;
+}
 
 void exec(uint32_t ins);
 
