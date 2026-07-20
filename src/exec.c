@@ -5,19 +5,6 @@
 #include <logger.h>
 #include <ops.h>
 
-// ==================== Likely/Unlikely Macros ====================
-
-#ifndef likely
-#define likely(x) __builtin_expect(!!(x), 1)
-#endif
-
-#ifndef unlikely
-#define unlikely(x) __builtin_expect(!!(x), 0)
-#endif
-
-// ==================== Jump Tables for M Extension Only ====================
-
-// M-type (Multiply/Divide) extension jump table
 static void (*m_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
     [0] = {
         [0b0000001] = &insm_r_mul,
@@ -45,10 +32,6 @@ static void (*m_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
     },
 };
 
-// ==================== Sign Extension Helpers ====================
-
-// ==================== Main Execution ====================
-
 void
 exec(uint32_t ins)
 {
@@ -59,40 +42,22 @@ exec(uint32_t ins)
     uint32_t rs2 = get_rs2(ins);
     uint32_t rd = get_rd(ins);
 
-    // Check for unsupported compressed extension
     if (unlikely((opcode & 3) != 3))
     {
         error("unsupported COMPACT extension");
         return;
     }
 
-    // Switch cases ordered by estimated hotness:
-    // 1. R-type ALU (most common)
-    // 2. I-type ALU (second most common)
-    // 3. Load instructions
-    // 4. Store instructions
-    // 5. Branch instructions
-    // 6. JAL
-    // 7. LUI
-    // 8. AUIPC
-    // 9. JALR
-    // 10. System instructions (rare)
-
     switch (opcode)
     {
-    // ==================== R-type: Most common ALU operations
-    // ====================
     case 0b0110011:
     {
-        // Check if this is a M-extension instruction
         if (unlikely(funct7 == 0b0000001))
         {
-            // M-extension: use jump table
             m_ins_optable[funct3][funct7](rs2, rs1, rd);
         }
         else
         {
-            // Base I-extension: execute directly with optimized switch
             switch (funct3)
             {
             case 0: // ADD / SUB
@@ -162,13 +127,11 @@ exec(uint32_t ins)
         break;
     }
 
-    // ==================== I-type ALU: Second most common ====================
     case 0b0010011:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
         uint32_t shamt = imm & 0x1F;
 
-        // Execute I-type ALU instructions directly
         switch (funct3)
         {
         case 0: // ADDI
@@ -176,7 +139,7 @@ exec(uint32_t ins)
             break;
 
         case 1: // SLLI
-            if (unlikely((imm & 0xFE0) != 0)) error("invalid SLLI shamt");
+            // if (unlikely((imm & 0xFE0) != 0)) error("invalid SLLI shamt");
             insi_i_slli(shamt, rs1, rd);
             break;
 
@@ -193,7 +156,7 @@ exec(uint32_t ins)
             break;
 
         case 5: // SRLI / SRAI
-            if (unlikely((imm & 0xFE0) != 0)) error("invalid shift shamt");
+            // if (unlikely((imm & 0xFE0) != 0)) error("invalid shift shamt");
             if (likely(funct7 == 0b0000000))
                 insi_i_srli(shamt, rs1, rd);
             else if (funct7 == 0b0100000)
@@ -216,7 +179,6 @@ exec(uint32_t ins)
         break;
     }
 
-    // ==================== Load Instructions ====================
     case 0b0000011:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
@@ -249,7 +211,6 @@ exec(uint32_t ins)
         break;
     }
 
-    // ==================== Store Instructions ====================
     case 0b0100011:
     {
         uint32_t imm = ((ins >> 25) & 0x7F) << 5;
@@ -276,7 +237,6 @@ exec(uint32_t ins)
         break;
     }
 
-    // ==================== Branch Instructions ====================
     case 0b1100011:
     {
         uint32_t imm = ((ins >> 31) & 0x1) << 12;
@@ -317,7 +277,6 @@ exec(uint32_t ins)
         break;
     }
 
-    // ==================== JAL: Jump and Link ====================
     case 0b1101111:
     {
         uint32_t imm = ((ins >> 31) & 0x1) << 20;
@@ -329,7 +288,6 @@ exec(uint32_t ins)
         break;
     }
 
-    // ==================== LUI: Load Upper Immediate ====================
     case 0b0110111:
     {
         uint32_t imm = ins & 0xFFFFF000;
@@ -337,8 +295,6 @@ exec(uint32_t ins)
         break;
     }
 
-    // ==================== AUIPC: Add Upper Immediate to PC
-    // ====================
     case 0b0010111:
     {
         uint32_t imm = ins & 0xFFFFF000;
@@ -346,7 +302,6 @@ exec(uint32_t ins)
         break;
     }
 
-    // ==================== JALR: Jump and Link Register ====================
     case 0b1100111:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
@@ -354,7 +309,6 @@ exec(uint32_t ins)
         break;
     }
 
-    // ==================== System Instructions (rare) ====================
     case 0b1110011:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);

@@ -10,18 +10,6 @@
 
 #define PC_BACKWARD g_state.pc -= 4 // in main loop we always pc+=4
 
-// ==================== Likely/Unlikely Macros ====================
-
-#ifndef likely
-#define likely(x) __builtin_expect(!!(x), 1)
-#endif
-
-#ifndef unlikely
-#define unlikely(x) __builtin_expect(!!(x), 0)
-#endif
-
-// ==================== R-type Integer Instructions ====================
-
 static inline void
 insi_r_add(uint32_t rs2, uint32_t rs1, uint32_t rd)
 {
@@ -102,9 +90,6 @@ insi_r_sltu(uint32_t rs2, uint32_t rs1, uint32_t rd)
     reg_write(rd, (v1 < v2) ? 1 : 0);
 }
 
-// ==================== M-type Integer Instructions (NOT inlined - jump table)
-// ====================
-
 void insm_r_mul(uint32_t rs2, uint32_t rs1, uint32_t rd);
 void insm_r_mulh(uint32_t rs2, uint32_t rs1, uint32_t rd);
 void insm_r_mulsu(uint32_t rs2, uint32_t rs1, uint32_t rd);
@@ -113,8 +98,6 @@ void insm_r_div(uint32_t rs2, uint32_t rs1, uint32_t rd);
 void insm_r_divu(uint32_t rs2, uint32_t rs1, uint32_t rd);
 void insm_r_rem(uint32_t rs2, uint32_t rs1, uint32_t rd);
 void insm_r_remu(uint32_t rs2, uint32_t rs1, uint32_t rd);
-
-// ==================== I-type ALU Instructions ====================
 
 static inline void
 insi_i_addi(uint32_t imm, uint32_t rs1, uint32_t rd)
@@ -184,8 +167,6 @@ insi_i_sltiu(uint32_t imm, uint32_t rs1, uint32_t rd)
     reg_write(rd, (v1 < v2) ? 1 : 0);
 }
 
-// ==================== I-type Load Instructions ====================
-
 static inline void
 insi_i_lb(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
@@ -198,10 +179,6 @@ static inline void
 insi_i_lh(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
-    if (unlikely(!is_aligned(addr, 2)))
-    {
-        error("misaligned load halfword");
-    }
     int32_t val = mem_read16_signed(addr);
     reg_write(rd, (uint32_t)val);
 }
@@ -210,10 +187,6 @@ static inline void
 insi_i_lw(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
-    if (unlikely(!is_aligned(addr, 4)))
-    {
-        error("misaligned load word");
-    }
     int32_t val = mem_read32_signed(addr);
     reg_write(rd, (uint32_t)val);
 }
@@ -230,15 +203,9 @@ static inline void
 insi_i_lhu(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
-    if (unlikely(!is_aligned(addr, 2)))
-    {
-        error("misaligned load halfword unsigned");
-    }
     uint32_t val = mem_read16_unsigned(addr);
     reg_write(rd, val);
 }
-
-// ==================== JALR Instruction ====================
 
 static inline void
 insi_i_jalr(uint32_t imm, uint32_t rs1, uint32_t rd)
@@ -250,8 +217,6 @@ insi_i_jalr(uint32_t imm, uint32_t rs1, uint32_t rd)
     g_state.pc = addr;
     PC_BACKWARD;
 }
-
-// ==================== S-type Store Instructions ====================
 
 static inline void
 insi_s_sb(uint32_t imm, uint32_t rs2, uint32_t rs1)
@@ -265,10 +230,6 @@ static inline void
 insi_s_sh(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     uint32_t addr = reg_read(rs1) + imm;
-    if (unlikely(!is_aligned(addr, 2)))
-    {
-        error("misaligned store halfword");
-    }
     uint32_t val = reg_read(rs2);
     mem_write16(addr, (uint16_t)(val & 0xFFFF));
 }
@@ -277,15 +238,9 @@ static inline void
 insi_s_sw(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     uint32_t addr = reg_read(rs1) + imm;
-    if (unlikely(!is_aligned(addr, 4)))
-    {
-        error("misaligned store word");
-    }
     uint32_t val = reg_read(rs2);
     mem_write32(addr, val);
 }
-
-// ==================== B-type Branch Instructions ====================
 
 static inline void
 insi_b_beq(uint32_t imm, uint32_t rs2, uint32_t rs1)
@@ -359,8 +314,6 @@ insi_b_bgeu(uint32_t imm, uint32_t rs2, uint32_t rs1)
     }
 }
 
-// ==================== U-type Instructions ====================
-
 static inline void
 insi_u_lui(uint32_t imm, uint32_t rd)
 {
@@ -373,8 +326,6 @@ insi_u_auipc(uint32_t imm, uint32_t rd)
     reg_write(rd, g_state.pc + imm);
 }
 
-// ==================== J-type Instruction ====================
-
 static inline void
 insi_j_jal(uint32_t imm, uint32_t rd)
 {
@@ -382,8 +333,6 @@ insi_j_jal(uint32_t imm, uint32_t rd)
     g_state.pc += imm;
     PC_BACKWARD;
 }
-
-// ==================== System Instructions ====================
 
 static inline void
 insi_i_ecall(void)
@@ -398,8 +347,6 @@ insi_i_ebreak(void)
     info("Stopped at EBREAK");
     g_state.single_step = 1;
 }
-
-// ==================== Sign Extension Helpers ====================
 
 static inline uint32_t
 sign_extend_12(uint32_t imm)

@@ -37,11 +37,19 @@ init_debugger(void)
 static void
 print_registers(void)
 {
+    const char *reg_names[]
+        = { "zero", "ra", "sp",  "gp",  "tp", "t0", "t1", "t2",
+            "s0",   "s1", "a0",  "a1",  "a2", "a3", "a4", "a5",
+            "a6",   "a7", "s2",  "s3",  "s4", "s5", "s6", "s7",
+            "s8",   "s9", "s10", "s11", "t3", "t4", "t5", "t6" };
+
     printf("PC=0x%08x\n", g_state.pc);
     printf("REGISTERS:\n");
+
     for (int i = 0; i < 32; i++)
     {
-        printf("  x%d=0x%08x\n", i, g_state.gpr[i]);
+        printf("%5s=0x%08x ", reg_names[i], g_state.gpr[i]);
+        if ((i + 1) % 4 == 0) printf("\n");
     }
 }
 
