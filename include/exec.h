@@ -5,7 +5,6 @@
 
 #include <emu.h>
 
-
 static inline uint32_t
 get_opcode(uint32_t ins)
 {

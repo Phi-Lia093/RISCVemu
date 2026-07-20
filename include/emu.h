@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define likely(x)   __builtin_expect(!!(x), 1)
+#define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
 struct machine_state

@@ -5,93 +5,49 @@
 #include <logger.h>
 #include <ops.h>
 
-static void (*r_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
+// ==================== Likely/Unlikely Macros ====================
+
+#ifndef likely
+#define likely(x) __builtin_expect(!!(x), 1)
+#endif
+
+#ifndef unlikely
+#define unlikely(x) __builtin_expect(!!(x), 0)
+#endif
+
+// ==================== Jump Tables for M Extension Only ====================
+
+// M-type (Multiply/Divide) extension jump table
+static void (*m_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
     [0] = {
-        [0b0000000] = &insi_r_add,
-        [0b0100000] = &insi_r_sub,
         [0b0000001] = &insm_r_mul,
     },
     [1] = {
-        [0b0000000] = &insi_r_sll,
         [0b0000001] = &insm_r_mulh,
     },
     [2] = {
-        [0b0000000] = &insi_r_slt,
         [0b0000001] = &insm_r_mulsu,
     },
     [3] = {
-        [0b0000000] = &insi_r_sltu,
         [0b0000001] = &insm_r_mulu,
     },
     [4] = {
-        [0b0000000] = &insi_r_xor,
         [0b0000001] = &insm_r_div,
     },
     [5] = {
-        [0b0000000] = &insi_r_srl,
-        [0b0100000] = &insi_r_sra,
         [0b0000001] = &insm_r_divu,
     },
     [6] = {
-        [0b0000000] = &insi_r_or,
         [0b0000001] = &insm_r_rem,
     },
     [7] = {
-        [0b0000000] = &insi_r_and,
         [0b0000001] = &insm_r_remu,
     },
 };
 
-static void (*i_alu_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
-    [0] = { [0b0000000] = &insi_i_addi },
-    [1] = { [0b0000000] = &insi_i_slli },
-    [2] = { [0b0000000] = &insi_i_slti },
-    [3] = { [0b0000000] = &insi_i_sltiu },
-    [4] = { [0b0000000] = &insi_i_xori },
-    [5] = {
-        [0b0000000] = &insi_i_srli,
-        [0b0100000] = &insi_i_srai,
-    },
-    [6] = { [0b0000000] = &insi_i_ori },
-    [7] = { [0b0000000] = &insi_i_andi },
-};
+// ==================== Sign Extension Helpers ====================
 
-static void (*i_mem_ins_optable[8])(uint32_t, uint32_t, uint32_t) = {
-    [0] = &insi_i_lb,  [1] = &insi_i_lh,  [2] = &insi_i_lw,
-    [4] = &insi_i_lbu, [5] = &insi_i_lhu,
-};
-
-static void (*s_mem_ins_optable[8])(uint32_t, uint32_t, uint32_t) = {
-    [0] = &insi_s_sb,
-    [1] = &insi_s_sh,
-    [2] = &insi_s_sw,
-};
-
-static void (*b_ins_optable[8])(uint32_t, uint32_t, uint32_t) = {
-    [0] = &insi_b_beq, [1] = &insi_b_bne,  [4] = &insi_b_blt,
-    [5] = &insi_b_bge, [6] = &insi_b_bltu, [7] = &insi_b_bgeu,
-};
-
-static inline uint32_t
-sign_extend_12(uint32_t imm)
-{
-    if (imm & 0x800) return imm | 0xFFFFF000;
-    return imm;
-}
-
-static inline uint32_t
-sign_extend_13(uint32_t imm)
-{
-    if (imm & 0x1000) return imm | 0xFFFFE000;
-    return imm;
-}
-
-static inline uint32_t
-sign_extend_21(uint32_t imm)
-{
-    if (imm & 0x100000) return imm | 0xFFE00000;
-    return imm;
-}
+// ==================== Main Execution ====================
 
 void
 exec(uint32_t ins)
@@ -103,57 +59,224 @@ exec(uint32_t ins)
     uint32_t rs2 = get_rs2(ins);
     uint32_t rd = get_rd(ins);
 
-    if ((opcode & 3) != 3) error("unsupported COMPACT extension");
+    // Check for unsupported compressed extension
+    if (unlikely((opcode & 3) != 3))
+    {
+        error("unsupported COMPACT extension");
+        return;
+    }
+
+    // Switch cases ordered by estimated hotness:
+    // 1. R-type ALU (most common)
+    // 2. I-type ALU (second most common)
+    // 3. Load instructions
+    // 4. Store instructions
+    // 5. Branch instructions
+    // 6. JAL
+    // 7. LUI
+    // 8. AUIPC
+    // 9. JALR
+    // 10. System instructions (rare)
 
     switch (opcode)
     {
+    // ==================== R-type: Most common ALU operations
+    // ====================
     case 0b0110011:
-        r_ins_optable[funct3][funct7](rs2, rs1, rd);
-        break;
+    {
+        // Check if this is a M-extension instruction
+        if (unlikely(funct7 == 0b0000001))
+        {
+            // M-extension: use jump table
+            m_ins_optable[funct3][funct7](rs2, rs1, rd);
+        }
+        else
+        {
+            // Base I-extension: execute directly with optimized switch
+            switch (funct3)
+            {
+            case 0: // ADD / SUB
+                if (likely(funct7 == 0b0000000))
+                    insi_r_add(rs2, rs1, rd);
+                else if (funct7 == 0b0100000)
+                    insi_r_sub(rs2, rs1, rd);
+                else
+                    error("invalid R-type funct7");
+                break;
 
+            case 1: // SLL
+                if (likely(funct7 == 0b0000000))
+                    insi_r_sll(rs2, rs1, rd);
+                else
+                    error("invalid R-type funct7");
+                break;
+
+            case 2: // SLT
+                if (likely(funct7 == 0b0000000))
+                    insi_r_slt(rs2, rs1, rd);
+                else
+                    error("invalid R-type funct7");
+                break;
+
+            case 3: // SLTU
+                if (likely(funct7 == 0b0000000))
+                    insi_r_sltu(rs2, rs1, rd);
+                else
+                    error("invalid R-type funct7");
+                break;
+
+            case 4: // XOR
+                if (likely(funct7 == 0b0000000))
+                    insi_r_xor(rs2, rs1, rd);
+                else
+                    error("invalid R-type funct7");
+                break;
+
+            case 5: // SRL / SRA
+                if (likely(funct7 == 0b0000000))
+                    insi_r_srl(rs2, rs1, rd);
+                else if (funct7 == 0b0100000)
+                    insi_r_sra(rs2, rs1, rd);
+                else
+                    error("invalid R-type funct7");
+                break;
+
+            case 6: // OR
+                if (likely(funct7 == 0b0000000))
+                    insi_r_or(rs2, rs1, rd);
+                else
+                    error("invalid R-type funct7");
+                break;
+
+            case 7: // AND
+                if (likely(funct7 == 0b0000000))
+                    insi_r_and(rs2, rs1, rd);
+                else
+                    error("invalid R-type funct7");
+                break;
+
+            default:
+                error("invalid R-type funct3");
+            }
+        }
+        break;
+    }
+
+    // ==================== I-type ALU: Second most common ====================
     case 0b0010011:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
         uint32_t shamt = imm & 0x1F;
 
-        if (funct3 == 1)
+        // Execute I-type ALU instructions directly
+        switch (funct3)
         {
-            if ((imm & 0xFE0) != 0) error("invalid SLLI shamt");
+        case 0: // ADDI
+            insi_i_addi(imm, rs1, rd);
+            break;
+
+        case 1: // SLLI
+            if (unlikely((imm & 0xFE0) != 0)) error("invalid SLLI shamt");
             insi_i_slli(shamt, rs1, rd);
-        }
-        else if (funct3 == 5)
-        {
-            if ((imm & 0xFE0) != 0) error("invalid shift shamt");
-            if (funct7 == 0b0000000)
+            break;
+
+        case 2: // SLTI
+            insi_i_slti(imm, rs1, rd);
+            break;
+
+        case 3: // SLTIU
+            insi_i_sltiu(imm, rs1, rd);
+            break;
+
+        case 4: // XORI
+            insi_i_xori(imm, rs1, rd);
+            break;
+
+        case 5: // SRLI / SRAI
+            if (unlikely((imm & 0xFE0) != 0)) error("invalid shift shamt");
+            if (likely(funct7 == 0b0000000))
                 insi_i_srli(shamt, rs1, rd);
             else if (funct7 == 0b0100000)
                 insi_i_srai(shamt, rs1, rd);
             else
                 error("invalid SRLI/SRAI funct7");
-        }
-        else
-        {
-            i_alu_ins_optable[funct3][0](imm, rs1, rd);
+            break;
+
+        case 6: // ORI
+            insi_i_ori(imm, rs1, rd);
+            break;
+
+        case 7: // ANDI
+            insi_i_andi(imm, rs1, rd);
+            break;
+
+        default:
+            error("invalid I-type funct3");
         }
         break;
     }
 
+    // ==================== Load Instructions ====================
     case 0b0000011:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
-        i_mem_ins_optable[funct3](imm, rs1, rd);
+
+        switch (funct3)
+        {
+        case 0: // LB
+            insi_i_lb(imm, rs1, rd);
+            break;
+
+        case 1: // LH
+            insi_i_lh(imm, rs1, rd);
+            break;
+
+        case 2: // LW
+            insi_i_lw(imm, rs1, rd);
+            break;
+
+        case 4: // LBU
+            insi_i_lbu(imm, rs1, rd);
+            break;
+
+        case 5: // LHU
+            insi_i_lhu(imm, rs1, rd);
+            break;
+
+        default:
+            error("invalid load instruction");
+        }
         break;
     }
 
+    // ==================== Store Instructions ====================
     case 0b0100011:
     {
         uint32_t imm = ((ins >> 25) & 0x7F) << 5;
         imm |= ((ins >> 7) & 0x1F);
         imm = sign_extend_12(imm);
-        s_mem_ins_optable[funct3](imm, rs2, rs1);
+
+        switch (funct3)
+        {
+        case 0: // SB
+            insi_s_sb(imm, rs2, rs1);
+            break;
+
+        case 1: // SH
+            insi_s_sh(imm, rs2, rs1);
+            break;
+
+        case 2: // SW
+            insi_s_sw(imm, rs2, rs1);
+            break;
+
+        default:
+            error("invalid store instruction");
+        }
         break;
     }
 
+    // ==================== Branch Instructions ====================
     case 0b1100011:
     {
         uint32_t imm = ((ins >> 31) & 0x1) << 12;
@@ -161,10 +284,40 @@ exec(uint32_t ins)
         imm |= ((ins >> 8) & 0xF) << 1;
         imm |= ((ins >> 7) & 0x1) << 11;
         imm = sign_extend_13(imm);
-        b_ins_optable[funct3](imm, rs2, rs1);
+
+        switch (funct3)
+        {
+        case 0: // BEQ
+            insi_b_beq(imm, rs2, rs1);
+            break;
+
+        case 1: // BNE
+            insi_b_bne(imm, rs2, rs1);
+            break;
+
+        case 4: // BLT
+            insi_b_blt(imm, rs2, rs1);
+            break;
+
+        case 5: // BGE
+            insi_b_bge(imm, rs2, rs1);
+            break;
+
+        case 6: // BLTU
+            insi_b_bltu(imm, rs2, rs1);
+            break;
+
+        case 7: // BGEU
+            insi_b_bgeu(imm, rs2, rs1);
+            break;
+
+        default:
+            error("invalid branch instruction");
+        }
         break;
     }
 
+    // ==================== JAL: Jump and Link ====================
     case 0b1101111:
     {
         uint32_t imm = ((ins >> 31) & 0x1) << 20;
@@ -176,6 +329,7 @@ exec(uint32_t ins)
         break;
     }
 
+    // ==================== LUI: Load Upper Immediate ====================
     case 0b0110111:
     {
         uint32_t imm = ins & 0xFFFFF000;
@@ -183,6 +337,8 @@ exec(uint32_t ins)
         break;
     }
 
+    // ==================== AUIPC: Add Upper Immediate to PC
+    // ====================
     case 0b0010111:
     {
         uint32_t imm = ins & 0xFFFFF000;
@@ -190,6 +346,7 @@ exec(uint32_t ins)
         break;
     }
 
+    // ==================== JALR: Jump and Link Register ====================
     case 0b1100111:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
@@ -197,13 +354,14 @@ exec(uint32_t ins)
         break;
     }
 
+    // ==================== System Instructions (rare) ====================
     case 0b1110011:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
 
-        if (funct3 == 0)
+        if (likely(funct3 == 0))
         {
-            if (imm == 0)
+            if (likely(imm == 0))
                 insi_i_ecall();
             else if (imm == 1)
                 insi_i_ebreak();
