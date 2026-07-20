@@ -90,15 +90,6 @@ insi_r_sltu(uint32_t rs2, uint32_t rs1, uint32_t rd)
     reg_write(rd, (v1 < v2) ? 1 : 0);
 }
 
-void insm_r_mul(uint32_t rs2, uint32_t rs1, uint32_t rd);
-void insm_r_mulh(uint32_t rs2, uint32_t rs1, uint32_t rd);
-void insm_r_mulsu(uint32_t rs2, uint32_t rs1, uint32_t rd);
-void insm_r_mulu(uint32_t rs2, uint32_t rs1, uint32_t rd);
-void insm_r_div(uint32_t rs2, uint32_t rs1, uint32_t rd);
-void insm_r_divu(uint32_t rs2, uint32_t rs1, uint32_t rd);
-void insm_r_rem(uint32_t rs2, uint32_t rs1, uint32_t rd);
-void insm_r_remu(uint32_t rs2, uint32_t rs1, uint32_t rd);
-
 static inline void
 insi_i_addi(uint32_t imm, uint32_t rs1, uint32_t rd)
 {

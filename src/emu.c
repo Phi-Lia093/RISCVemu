@@ -51,9 +51,11 @@ int
 main(int argc, char **argv)
 {
     int opt;
+#ifdef CONFIG_ENABLE_DEBUGGER
     int debug_mode = 0;
     uint32_t breakpoint = 0;
     int breakpoint_set = 0;
+#endif
     uint32_t program_base;
     const char *program_name;
 

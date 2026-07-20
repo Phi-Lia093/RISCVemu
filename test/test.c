@@ -16,9 +16,5 @@ _start(void)
 int
 _main()
 {
-    for(int i=0x2000;i<0x10000000;i+=4)
-    {
-        *(volatile int*)i = 0xdeadbeef;
-    }
     return 0x325;
 }

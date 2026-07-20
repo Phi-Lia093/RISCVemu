@@ -1,12 +1,10 @@
 #include <emu.h>
 #include <exec.h>
+#include <extension/m_extension.h>
 #include <limits.h>
 #include <logger.h>
 #include <mem.h>
-#include <ops.h>
 #include <stdint.h>
-
-// ==================== M-type Integer Instructions ====================
 
 void
 insm_r_mul(uint32_t rs2, uint32_t rs1, uint32_t rd)

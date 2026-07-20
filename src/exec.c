@@ -2,10 +2,14 @@
 
 #include <config.h>
 
+#include <basic_instructions.h>
 #include <emu.h>
 #include <exec.h>
 #include <logger.h>
-#include <ops.h>
+
+#ifdef CONFIG_ENABLE_M_EXTENSION
+#include <extension/m_extension.h>
+#endif
 
 #ifdef CONFIG_ENABLE_M_EXTENSION
 static void (*m_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
@@ -63,6 +67,13 @@ exec(uint32_t ins)
         if (unlikely(funct7 == 0b0000001))
         {
             m_ins_optable[funct3][funct7](rs2, rs1, rd);
+        }
+#endif
+#ifndef CONFIG_ENABLE_M_EXTENSION
+        // ALL M extension instructions
+        if (unlikely(funct7 == 0b0000001))
+        {
+            error("unsupported M extension instruction");
         }
 #endif
         else
@@ -336,10 +347,15 @@ exec(uint32_t ins)
             else
                 error("illegal system instruction");
         }
+#ifndef CONFIG_ENABLE_ZICSR_EXTENSION
         else
         {
             error("unsupported CSR instruction");
         }
+#endif
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+
+#endif
         break;
     }
 
