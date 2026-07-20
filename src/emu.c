@@ -13,6 +13,8 @@
 #include <logger.h>
 #include <mem.h>
 
+#include <config.h>
+
 struct machine_state g_state;
 
 static void
@@ -21,9 +23,11 @@ print_usage(const char *prog_name)
     fprintf(stderr,
             "Usage: %s <program_file> <program_base> [options]\n"
             "Options:\n"
+#ifdef CONFIG_ENABLE_DEBUGGER
             "  -d, --debug         Enable single-step debug mode\n"
             "  -b, --breakpoint    Set breakpoint address (hex format, e.g., "
             "0x1000)\n"
+#endif
             "  -h, --help          Show this help message\n"
             "\n"
             "Example:\n"
@@ -53,16 +57,24 @@ main(int argc, char **argv)
     uint32_t program_base;
     const char *program_name;
 
-    static struct option long_options[]
-        = { { "debug", no_argument, 0, 'd' },
-            { "breakpoint", required_argument, 0, 'b' },
-            { "help", no_argument, 0, 'h' },
-            { 0, 0, 0, 0 } };
+    static struct option long_options[] = {
+#ifdef CONFIG_ENABLE_DEBUGGER
+        { "debug", no_argument, 0, 'd' },
+        { "breakpoint", required_argument, 0, 'b' },
+#endif
+        { "help", no_argument, 0, 'h' },
+        { 0, 0, 0, 0 }
+    };
 
+#ifdef CONFIG_ENABLE_DEBUGGER
     while ((opt = getopt_long(argc, argv, "db:h", long_options, NULL)) != -1)
+#else
+    while ((opt = getopt_long(argc, argv, "h", long_options, NULL)) != -1)
+#endif
     {
         switch (opt)
         {
+#ifdef CONFIG_ENABLE_DEBUGGER
         case 'd':
             debug_mode = 1;
             break;
@@ -76,6 +88,7 @@ main(int argc, char **argv)
             }
             breakpoint_set = 1;
             break;
+#endif
 
         case 'h':
             print_usage(argv[0]);
@@ -102,11 +115,17 @@ main(int argc, char **argv)
         return 1;
     }
 
+#ifdef CONFIG_ENABLE_DEBUGGER
     init_logger(debug_mode ? DEBUG : INFO, NULL);
+#else
+    init_logger(INFO, NULL);
+#endif
     info("RISC-V Emulator starting...");
     info("Program: %s", program_name);
     info("Base address: 0x%x", program_base);
+#ifdef CONFIG_ENABLE_DEBUGGER
     if (breakpoint_set) info("Breakpoint: 0x%x", breakpoint);
+#endif
 
     init_mem();
 
@@ -133,11 +152,14 @@ main(int argc, char **argv)
     info("loaded %zu bytes to 0x%x", len, program_base);
     munmap(addr, len);
 
+#ifdef CONFIG_ENABLE_DEBUGGER
     init_debugger();
+#endif
 
     memset(&g_state, 0, sizeof(g_state));
     g_state.pc = program_base;
     g_state.terminated = 0;
+#ifdef CONFIG_ENABLE_DEBUGGER
     g_state.single_step = debug_mode;
 
     if (breakpoint_set)
@@ -150,9 +172,14 @@ main(int argc, char **argv)
         g_state.breakpoint = 0xDEADBEEF;
         g_state.breakpoint_enabled = 0;
     }
+#else
+    g_state.single_step = 0;
+    g_state.breakpoint_enabled = 0;
+#endif
 
     info("starting execution at PC=0x%x", g_state.pc);
 
+#ifdef CONFIG_ENABLE_DEBUGGER
     while (!g_state.terminated)
     {
         if (g_state.pc >= MEM_SIZE)
@@ -181,6 +208,20 @@ main(int argc, char **argv)
         exec(ins);
         g_state.pc += 4;
     }
+#else
+    while (!g_state.terminated)
+    {
+        if (g_state.pc >= MEM_SIZE)
+        {
+            error("PC out of bounds: 0x%x", g_state.pc);
+            break;
+        }
+
+        uint32_t ins = mem_read32_unsigned(g_state.pc);
+        exec(ins);
+        g_state.pc += 4;
+    }
+#endif
 
     info("Execution terminated. Return value: 0x%x", g_state.gpr[10]);
     terminate_logger();

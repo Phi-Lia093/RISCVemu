@@ -1,10 +1,13 @@
 #include <stdint.h>
 
+#include <config.h>
+
 #include <emu.h>
 #include <exec.h>
 #include <logger.h>
 #include <ops.h>
 
+#ifdef CONFIG_ENABLE_M_EXTENSION
 static void (*m_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
     [0] = {
         [0b0000001] = &insm_r_mul,
@@ -31,6 +34,7 @@ static void (*m_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
         [0b0000001] = &insm_r_remu,
     },
 };
+#endif
 
 void
 exec(uint32_t ins)
@@ -42,20 +46,25 @@ exec(uint32_t ins)
     uint32_t rs2 = get_rs2(ins);
     uint32_t rd = get_rd(ins);
 
+    // this is C extension, no supported
     if (unlikely((opcode & 3) != 3))
     {
         error("unsupported COMPACT extension");
         return;
     }
 
-    switch (opcode)
+    switch (opcode) // sort by hotness
     {
+    // R format
     case 0b0110011:
     {
+#ifdef CONFIG_ENABLE_M_EXTENSION
+        // ALL M extension instructions
         if (unlikely(funct7 == 0b0000001))
         {
             m_ins_optable[funct3][funct7](rs2, rs1, rd);
         }
+#endif
         else
         {
             switch (funct3)
@@ -126,7 +135,7 @@ exec(uint32_t ins)
         }
         break;
     }
-
+    // I format
     case 0b0010011:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
@@ -178,7 +187,7 @@ exec(uint32_t ins)
         }
         break;
     }
-
+    // I format, LOAD instructions
     case 0b0000011:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
@@ -210,7 +219,7 @@ exec(uint32_t ins)
         }
         break;
     }
-
+    // S format, STORE instructions
     case 0b0100011:
     {
         uint32_t imm = ((ins >> 25) & 0x7F) << 5;
@@ -236,7 +245,7 @@ exec(uint32_t ins)
         }
         break;
     }
-
+    // B format, BRANCH instructions
     case 0b1100011:
     {
         uint32_t imm = ((ins >> 31) & 0x1) << 12;
@@ -277,6 +286,7 @@ exec(uint32_t ins)
         break;
     }
 
+    // JAL
     case 0b1101111:
     {
         uint32_t imm = ((ins >> 31) & 0x1) << 20;
@@ -288,6 +298,7 @@ exec(uint32_t ins)
         break;
     }
 
+    // LUI
     case 0b0110111:
     {
         uint32_t imm = ins & 0xFFFFF000;
@@ -295,6 +306,7 @@ exec(uint32_t ins)
         break;
     }
 
+    // AUIPC
     case 0b0010111:
     {
         uint32_t imm = ins & 0xFFFFF000;
@@ -302,6 +314,7 @@ exec(uint32_t ins)
         break;
     }
 
+    // JALR
     case 0b1100111:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
@@ -309,6 +322,7 @@ exec(uint32_t ins)
         break;
     }
 
+    // SYSTEM
     case 0b1110011:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
@@ -325,6 +339,25 @@ exec(uint32_t ins)
         else
         {
             error("unsupported CSR instruction");
+        }
+        break;
+    }
+
+    // fence fence.i
+    case 0b0001111:
+    {
+        switch (funct3)
+        {
+        case 0:
+            // FENCE
+            break;
+#ifdef CONFIG_ENABLE_ZIFENCEI_EXTENSION
+        case 1:
+            // FENCE.I
+            break;
+#endif
+        default:
+            error("illegal fence instruction");
         }
         break;
     }
