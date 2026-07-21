@@ -1,6 +1,7 @@
 #ifndef OPS_H
 #define OPS_H
 
+#include "extension/zifencei_extension.h"
 #include <emu.h>
 #include <logger.h>
 #include <mem.h>
@@ -337,6 +338,12 @@ insi_i_ebreak(void)
 {
     info("Stopped at EBREAK");
     g_state.single_step = 1;
+}
+
+static inline void
+ins_fence(void)
+{
+    // do nothing
 }
 
 static inline uint32_t

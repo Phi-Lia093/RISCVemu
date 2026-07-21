@@ -11,6 +11,14 @@
 #include <extension/m_extension.h>
 #endif
 
+#ifdef CONFIG_ENABLE_ZIFENCEI_EXTENSION
+#include <extension/zifencei_extension.h>
+#endif
+
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+#include <extension/zicsr_extension.h>
+#endif
+
 #ifdef CONFIG_ENABLE_M_EXTENSION
 static void (*m_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
     [0] = {
@@ -337,8 +345,10 @@ exec(uint32_t ins)
     case 0b1110011:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
-
-        if (likely(funct3 == 0))
+        uint32_t csr = ((ins >> 20) & 0xFFF);
+        switch (funct3)
+        {
+        case 0:
         {
             if (likely(imm == 0))
                 insi_i_ecall();
@@ -347,15 +357,44 @@ exec(uint32_t ins)
             else
                 error("illegal system instruction");
         }
-#ifndef CONFIG_ENABLE_ZICSR_EXTENSION
-        else
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+        case 0b001:
+        {
+            ins_zicsr_csrrw(rs1, rd, csr);
+            break;
+        }
+        case 0b010:
+        {
+            ins_zicsr_csrrs(rs1, rd, csr);
+            break;
+        }
+        case 0b011:
+        {
+            ins_zicsr_csrrc(rs1, rd, csr);
+            break;
+        }
+        // rs1 aka uimm
+        case 0b101:
+        {
+            ins_zicsr_csrrwi(rs1, rd, csr);
+            break;
+        }
+        case 0b110:
+        {
+            ins_zicsr_csrrsi(rs1, rd, csr);
+            break;
+        }
+        case 0b111:
+        {
+            ins_zicsr_csrrci(rs1, rd, csr);
+            break;
+        }
+#endif
+        default:
         {
             error("unsupported CSR instruction");
         }
-#endif
-#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
-
-#endif
+        }
         break;
     }
 
@@ -366,10 +405,12 @@ exec(uint32_t ins)
         {
         case 0:
             // FENCE
+            ins_fence();
             break;
 #ifdef CONFIG_ENABLE_ZIFENCEI_EXTENSION
         case 1:
             // FENCE.I
+            ins_zifencei_zifencei();
             break;
 #endif
         default:
