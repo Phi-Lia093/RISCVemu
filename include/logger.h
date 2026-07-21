@@ -35,5 +35,6 @@ void debug(char *fmt, ...);
 void info(char *fmt, ...);
 void warn(char *fmt, ...);
 void error(char *fmt, ...);
+void fatal(char *fmt, ...);
 
 #endif

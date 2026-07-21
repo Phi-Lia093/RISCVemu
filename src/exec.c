@@ -11,6 +11,10 @@
 #include <extension/m_extension.h>
 #endif
 
+#ifdef CONFIG_ENABLE_A_EXTENSION
+#include <extension/a_extension.h>
+#endif
+
 #ifdef CONFIG_ENABLE_ZIFENCEI_EXTENSION
 #include <extension/zifencei_extension.h>
 #endif
@@ -61,7 +65,7 @@ exec(uint32_t ins)
     // this is C extension, no supported
     if (unlikely((opcode & 3) != 3))
     {
-        error("unsupported COMPACT extension");
+        fatal("unsupported COMPACT extension");
         return;
     }
 
@@ -81,7 +85,7 @@ exec(uint32_t ins)
         // ALL M extension instructions
         if (unlikely(funct7 == 0b0000001))
         {
-            error("unsupported M extension instruction");
+            fatal("unsupported M extension instruction");
         }
 #endif
         else
@@ -94,35 +98,35 @@ exec(uint32_t ins)
                 else if (funct7 == 0b0100000)
                     insi_r_sub(rs2, rs1, rd);
                 else
-                    error("invalid R-type funct7");
+                    fatal("invalid R-type funct7");
                 break;
 
             case 1: // SLL
                 if (likely(funct7 == 0b0000000))
                     insi_r_sll(rs2, rs1, rd);
                 else
-                    error("invalid R-type funct7");
+                    fatal("invalid R-type funct7");
                 break;
 
             case 2: // SLT
                 if (likely(funct7 == 0b0000000))
                     insi_r_slt(rs2, rs1, rd);
                 else
-                    error("invalid R-type funct7");
+                    fatal("invalid R-type funct7");
                 break;
 
             case 3: // SLTU
                 if (likely(funct7 == 0b0000000))
                     insi_r_sltu(rs2, rs1, rd);
                 else
-                    error("invalid R-type funct7");
+                    fatal("invalid R-type funct7");
                 break;
 
             case 4: // XOR
                 if (likely(funct7 == 0b0000000))
                     insi_r_xor(rs2, rs1, rd);
                 else
-                    error("invalid R-type funct7");
+                    fatal("invalid R-type funct7");
                 break;
 
             case 5: // SRL / SRA
@@ -131,25 +135,25 @@ exec(uint32_t ins)
                 else if (funct7 == 0b0100000)
                     insi_r_sra(rs2, rs1, rd);
                 else
-                    error("invalid R-type funct7");
+                    fatal("invalid R-type funct7");
                 break;
 
             case 6: // OR
                 if (likely(funct7 == 0b0000000))
                     insi_r_or(rs2, rs1, rd);
                 else
-                    error("invalid R-type funct7");
+                    fatal("invalid R-type funct7");
                 break;
 
             case 7: // AND
                 if (likely(funct7 == 0b0000000))
                     insi_r_and(rs2, rs1, rd);
                 else
-                    error("invalid R-type funct7");
+                    fatal("invalid R-type funct7");
                 break;
 
             default:
-                error("invalid R-type funct3");
+                fatal("invalid R-type funct3");
             }
         }
         break;
@@ -167,7 +171,6 @@ exec(uint32_t ins)
             break;
 
         case 1: // SLLI
-            // if (unlikely((imm & 0xFE0) != 0)) error("invalid SLLI shamt");
             insi_i_slli(shamt, rs1, rd);
             break;
 
@@ -184,13 +187,12 @@ exec(uint32_t ins)
             break;
 
         case 5: // SRLI / SRAI
-            // if (unlikely((imm & 0xFE0) != 0)) error("invalid shift shamt");
             if (likely(funct7 == 0b0000000))
                 insi_i_srli(shamt, rs1, rd);
             else if (funct7 == 0b0100000)
                 insi_i_srai(shamt, rs1, rd);
             else
-                error("invalid SRLI/SRAI funct7");
+                fatal("invalid SRLI/SRAI funct7");
             break;
 
         case 6: // ORI
@@ -202,7 +204,7 @@ exec(uint32_t ins)
             break;
 
         default:
-            error("invalid I-type funct3");
+            fatal("invalid I-type funct3");
         }
         break;
     }
@@ -234,7 +236,7 @@ exec(uint32_t ins)
             break;
 
         default:
-            error("invalid load instruction");
+            fatal("invalid load instruction");
         }
         break;
     }
@@ -260,10 +262,74 @@ exec(uint32_t ins)
             break;
 
         default:
-            error("invalid store instruction");
+            fatal("invalid store instruction");
         }
         break;
     }
+#ifdef CONFIG_ENABLE_A_EXTENSION
+    case 0b0101111:
+    {
+        if (likely(funct3 == 0x2))
+        {
+            uint32_t funct5 = (ins >> 27) & 0x1F;
+            switch (funct5)
+            {
+            case 0x00:
+            {
+                insa_r_amoadd_w(rs1, rs2, rd);
+                break;
+            }
+            case 0x01:
+            {
+                insa_r_amoswap_w(rs1, rs2, rd);
+                break;
+            }
+            case 0x02:
+            {
+                insa_r_lr_w(rs1, rd);
+                break;
+            }
+            case 0x03:
+            {
+                insa_r_sc_w(rs1, rs2, rd);
+                break;
+            }
+            case 0x04:
+            {
+                insa_r_amoxor_w(rs1, rs2, rd);
+                break;
+            }
+            case 0x0A:
+            {
+                insa_r_amoor_w(rs1, rs2, rd);
+                break;
+            }
+            case 0x0C:
+            {
+                insa_r_amoand_w(rs1, rs2, rd);
+                break;
+            }
+            case 0x10:
+            {
+                insa_r_amomin_w(rs1, rs2, rd);
+                break;
+            }
+            case 0x14:
+            {
+                insa_r_amomax_w(rs1, rs2, rd);
+                break;
+            }
+            default:
+                fatal("invalid atomic instruction");
+            }
+        }
+        else
+        {
+            fatal("invalid atomic instruction");
+        }
+        break;
+    }
+#endif
     // B format, BRANCH instructions
     case 0b1100011:
     {
@@ -300,7 +366,7 @@ exec(uint32_t ins)
             break;
 
         default:
-            error("invalid branch instruction");
+            fatal("invalid branch instruction");
         }
         break;
     }
@@ -355,7 +421,7 @@ exec(uint32_t ins)
             else if (imm == 1)
                 insi_i_ebreak();
             else
-                error("illegal system instruction");
+                fatal("illegal system instruction %i", imm);
         }
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
         case 0b001:
@@ -392,7 +458,7 @@ exec(uint32_t ins)
 #endif
         default:
         {
-            error("unsupported CSR instruction");
+            fatal("unsupported CSR instruction");
         }
         }
         break;
@@ -414,12 +480,12 @@ exec(uint32_t ins)
             break;
 #endif
         default:
-            error("illegal fence instruction");
+            fatal("illegal fence instruction");
         }
         break;
     }
 
     default:
-        error("illegal opcode");
+        fatal("illegal opcode");
     }
 }

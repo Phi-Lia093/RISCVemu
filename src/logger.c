@@ -106,3 +106,15 @@ error(char *fmt, ...)
     generic_logger("ERROR", fmt, args);
     va_end(args);
 }
+
+void
+fatal(char *fmt, ...)
+{
+    if (level > ERROR) return;
+    va_list args;
+    va_start(args, fmt);
+    generic_logger("!!!FATAL!!!", fmt, args);
+    va_end(args);
+    terminate_logger();
+    exit(-1);
+}

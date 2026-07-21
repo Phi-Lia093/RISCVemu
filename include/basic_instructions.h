@@ -1,7 +1,6 @@
 #ifndef OPS_H
 #define OPS_H
 
-#include "extension/zifencei_extension.h"
 #include <emu.h>
 #include <logger.h>
 #include <mem.h>
@@ -171,6 +170,9 @@ static inline void
 insi_i_lh(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
+    if (unlikely(addr & 0x1)) {
+        fatal("LH misaligned address: 0x%x", addr);
+    }
     int32_t val = mem_read16_signed(addr);
     reg_write(rd, (uint32_t)val);
 }
@@ -179,6 +181,9 @@ static inline void
 insi_i_lw(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
+    if (unlikely(addr & 0x3)) {
+        fatal("LW misaligned address: 0x%x", addr);
+    }
     int32_t val = mem_read32_signed(addr);
     reg_write(rd, (uint32_t)val);
 }
@@ -195,6 +200,9 @@ static inline void
 insi_i_lhu(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
+    if (unlikely(addr & 0x1)) {
+        fatal("LHU misaligned address: 0x%x", addr);
+    }
     uint32_t val = mem_read16_unsigned(addr);
     reg_write(rd, val);
 }
@@ -222,6 +230,9 @@ static inline void
 insi_s_sh(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     uint32_t addr = reg_read(rs1) + imm;
+    if (unlikely(addr & 0x1)) {
+        fatal("SH misaligned address: 0x%x", addr);
+    }
     uint32_t val = reg_read(rs2);
     mem_write16(addr, (uint16_t)(val & 0xFFFF));
 }
@@ -230,6 +241,9 @@ static inline void
 insi_s_sw(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     uint32_t addr = reg_read(rs1) + imm;
+    if (unlikely(addr & 0x3)) {
+        fatal("SW misaligned address: 0x%x", addr);
+    }
     uint32_t val = reg_read(rs2);
     mem_write32(addr, val);
 }
@@ -239,8 +253,7 @@ insi_b_beq(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     uint32_t v1 = reg_read(rs1);
     uint32_t v2 = reg_read(rs2);
-    if (likely(v1 == v2))
-    {
+    if (likely(v1 == v2)) {
         g_state.pc += imm;
         PC_BACKWARD;
     }
@@ -251,8 +264,7 @@ insi_b_bne(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     uint32_t v1 = reg_read(rs1);
     uint32_t v2 = reg_read(rs2);
-    if (likely(v1 != v2))
-    {
+    if (likely(v1 != v2)) {
         g_state.pc += imm;
         PC_BACKWARD;
     }
@@ -263,8 +275,7 @@ insi_b_blt(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     int32_t v1 = (int32_t)reg_read(rs1);
     int32_t v2 = (int32_t)reg_read(rs2);
-    if (likely(v1 < v2))
-    {
+    if (likely(v1 < v2)) {
         g_state.pc += imm;
         PC_BACKWARD;
     }
@@ -275,8 +286,7 @@ insi_b_bge(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     int32_t v1 = (int32_t)reg_read(rs1);
     int32_t v2 = (int32_t)reg_read(rs2);
-    if (likely(v1 >= v2))
-    {
+    if (likely(v1 >= v2)) {
         g_state.pc += imm;
         PC_BACKWARD;
     }
@@ -287,8 +297,7 @@ insi_b_bltu(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     uint32_t v1 = reg_read(rs1);
     uint32_t v2 = reg_read(rs2);
-    if (likely(v1 < v2))
-    {
+    if (likely(v1 < v2)) {
         g_state.pc += imm;
         PC_BACKWARD;
     }
@@ -299,8 +308,7 @@ insi_b_bgeu(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     uint32_t v1 = reg_read(rs1);
     uint32_t v2 = reg_read(rs2);
-    if (likely(v1 >= v2))
-    {
+    if (likely(v1 >= v2)) {
         g_state.pc += imm;
         PC_BACKWARD;
     }

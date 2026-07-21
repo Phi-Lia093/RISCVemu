@@ -15,7 +15,7 @@
 
 #include <config.h>
 
-struct machine_state g_state;
+struct machine_state g_state = { 0 }; // this will not fuck up addrs
 
 static void
 print_usage(const char *prog_name)
@@ -136,21 +136,19 @@ main(int argc, char **argv)
         = (uint8_t *)map_file(program_name, &len, PROT_READ | PROT_WRITE);
     if (!addr)
     {
-        error("failed to load program: %s", program_name);
-        terminate_logger();
-        return 1;
+        fatal("failed to load program: %s", program_name);
     }
 
     if (program_base + len > MEM_SIZE)
     {
-        error("program too large for memory (base=0x%x, size=%zu, max=0x%x)",
+        fatal("program too large for memory (base=0x%x, size=%zu, max=0x%x)",
               program_base, len, MEM_SIZE);
         munmap(addr, len);
         terminate_logger();
         return 1;
     }
 
-    memcpy(g_main_mem + program_base, addr, len);
+    memcpy(g_state.main_memory + program_base, addr, len);
     info("loaded %zu bytes to 0x%x", len, program_base);
     munmap(addr, len);
 
@@ -158,7 +156,8 @@ main(int argc, char **argv)
     init_debugger();
 #endif
 
-    memset(&g_state, 0, sizeof(g_state));
+    // we cannot fill 0 here because we will fuck up the mmu flags addr and main
+    // mem addr
     g_state.pc = program_base;
     g_state.terminated = 0;
 #ifdef CONFIG_ENABLE_DEBUGGER
@@ -186,7 +185,7 @@ main(int argc, char **argv)
     {
         if (g_state.pc >= MEM_SIZE)
         {
-            error("PC out of bounds: 0x%x", g_state.pc);
+            fatal("PC out of bounds: 0x%x", g_state.pc);
             break;
         }
 
@@ -215,7 +214,7 @@ main(int argc, char **argv)
     {
         if (g_state.pc >= MEM_SIZE)
         {
-            error("PC out of bounds: 0x%x", g_state.pc);
+            fatal("PC out of bounds: 0x%x", g_state.pc);
             break;
         }
 
