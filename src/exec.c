@@ -7,6 +7,10 @@
 #include <exec.h>
 #include <logger.h>
 
+#ifdef CONFIG_ENABLE_C_EXTENSION
+#include <extension/c_extension.h>
+#endif
+
 #ifdef CONFIG_ENABLE_M_EXTENSION
 #include <extension/m_extension.h>
 #endif
@@ -62,12 +66,22 @@ exec(uint32_t ins)
     uint32_t rs2 = get_rs2(ins);
     uint32_t rd = get_rd(ins);
 
-    // this is C extension, no supported
+// we now support COMPACT extension ┌(┌^o^)┐
+#ifdef CONFIG_ENABLE_C_EXTENSION
+    if (likely((opcode & 3) != 3))
+    {
+        uint16_t c_ins = (uint16_t)(ins & 0xFFFF);
+        g_state.pc -= 2;
+        return;
+    }
+#endif
+#ifndef CONFIG_ENABLE_C_EXTENSION
     if (unlikely((opcode & 3) != 3))
     {
         fatal("unsupported COMPACT extension");
         return;
     }
+#endif
 
     switch (opcode) // sort by hotness
     {
