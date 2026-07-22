@@ -401,19 +401,75 @@ disasm(uint32_t ins)
     // SYSTEM
     case 0b1110011:
     {
-        uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
+        uint32_t imm
+            = (ins >> 20) & 0xFFF; // 不需要 sign_extend，用于 SYSTEM 指令
         uint32_t csr = (ins >> 20) & 0xFFF;
+        uint32_t rs1 = (ins >> 15) & 0x1F;
+        uint32_t rd = (ins >> 7) & 0x1F;
 
         switch (funct3)
         {
-        case 0:
-            if (imm == 0)
-                sprintf(disasm_buf, "ecall");
-            else if (imm == 1)
-                sprintf(disasm_buf, "ebreak");
+        case 0: // 特权指令
+        {
+            // 先检查 rs1=0 且 rd=0 的情况
+            if (rs1 == 0 && rd == 0)
+            {
+                switch (imm)
+                {
+                case 0x000:
+                    sprintf(disasm_buf, "ecall");
+                    break;
+                case 0x001:
+                    sprintf(disasm_buf, "ebreak");
+                    break;
+                case 0x100:
+                    sprintf(disasm_buf, "sret");
+                    break;
+                case 0x300:
+                    sprintf(disasm_buf, "mret");
+                    break;
+                case 0x700:
+                    sprintf(disasm_buf, "mnret");
+                    break;
+                case 0x104:
+                    sprintf(disasm_buf, "sctrclr");
+                    break;
+                case 0x105:
+                    sprintf(disasm_buf, "wfi");
+                    break;
+                default:
+                    goto unknown;
+                }
+            }
+            else if (imm == 0)
+            {
+                // sfence.vma: imm=0, rs1/rd 可以是非零
+                // 根据 rs1 和 rd 是否为零显示不同格式
+                if (rs1 == 0 && rd == 0)
+                {
+                    sprintf(disasm_buf, "sfence.vma");
+                }
+                else if (rs1 != 0 && rd == 0)
+                {
+                    sprintf(disasm_buf, "sfence.vma %s", reg_name(rs1));
+                }
+                else if (rs1 == 0 && rd != 0)
+                {
+                    sprintf(disasm_buf, "sfence.vma , %s", reg_name(rd));
+                }
+                else
+                {
+                    sprintf(disasm_buf, "sfence.vma %s, %s", reg_name(rs1),
+                            reg_name(rd));
+                }
+            }
             else
-                sprintf(disasm_buf, "unknown system (imm=%d)", (int32_t)imm);
+            {
+                goto unknown;
+            }
             break;
+        }
+
         case 0b001: // CSRRW
             sprintf(disasm_buf, "csrrw %s, %s, 0x%03x", reg_name(rd),
                     reg_name(rs1), csr);
@@ -426,11 +482,11 @@ disasm(uint32_t ins)
             sprintf(disasm_buf, "csrrc %s, %s, 0x%03x", reg_name(rd),
                     reg_name(rs1), csr);
             break;
-        case 0b101: // CSRRWI
+        case 0b101: // CSRRWI (rs1 是立即数)
             sprintf(disasm_buf, "csrrwi %s, %d, 0x%03x", reg_name(rd), rs1,
                     csr);
             break;
-        case 0b110: // CSRRWI
+        case 0b110: // CSRRSI
             sprintf(disasm_buf, "csrrsi %s, %d, 0x%03x", reg_name(rd), rs1,
                     csr);
             break;

@@ -424,47 +424,90 @@ exec(uint32_t ins)
     // SYSTEM
     case 0b1110011:
     {
-        uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
-        uint32_t csr = ((ins >> 20) & 0xFFF);
+        uint32_t imm
+            = (ins >> 20)
+              & 0xFFF; // 不需要 sign_extend，对于 SYSTEM 指令是无符号的
+        uint32_t csr = (ins >> 20) & 0xFFF;
+        uint32_t rs1 = (ins >> 15) & 0x1F;
+        uint32_t rd = (ins >> 7) & 0x1F;
+
         switch (funct3)
         {
-        case 0:
+        case 0: // 特权指令 (ecall, ebreak, sret, mret, wfi, sfence.vma 等)
         {
-            if (likely(imm == 0))
-                insi_i_ecall();
-            else if (imm == 1)
-                insi_i_ebreak();
+            // 先提取关键字段判断
+            if (rs1 == 0 && rd == 0)
+            { // 注意：对于 SYSTEM 指令，rd 字段也是 0
+                // rs1=0, rd=0 的情况：ecall, ebreak, sret, mret, mnret, wfi,
+                // sctrclr
+                switch (imm)
+                {
+                case 0x000: // ecall
+                    insi_i_ecall();
+                    break;
+                case 0x001: // ebreak
+                    insi_i_ebreak();
+                    break;
+                case 0x100: // sret (正确的编码)
+                    ins_sret();
+                    break;
+                case 0x300: // mret (正确的编码)
+                    ins_mret();
+                    break;
+                case 0x700: // mnret (正确的编码)
+                    ins_mnret();
+                    break;
+                case 0x104: // sctrclr (正确的编码)
+                    ins_sctrclr();
+                    break;
+                case 0x105: // wfi (正确的编码，0x105 不是 0x102)
+                    ins_wfi();
+                    break;
+                default:
+                    fatal("illegal system instruction imm=0x%x", imm);
+                }
+            }
+            else if (imm == 0)
+            {
+                // sfence.vma: imm=0, rs1/rd 可以是非零值
+                // rs1 是地址寄存器，rd 应该是 0 (但规范中 rd 字段保留)
+                ins_sfence_vma();
+            }
             else
-                fatal("illegal system instruction %i", imm);
+            {
+                fatal("illegal system instruction imm=0x%x rs1=%d rd=%d", imm,
+                      rs1, rd);
+            }
+            break;
         }
+
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
-        case 0b001:
+        case 0b001: // CSRRW
         {
             ins_zicsr_csrrw(rs1, rd, csr);
             break;
         }
-        case 0b010:
+        case 0b010: // CSRRS
         {
             ins_zicsr_csrrs(rs1, rd, csr);
             break;
         }
-        case 0b011:
+        case 0b011: // CSRRC
         {
             ins_zicsr_csrrc(rs1, rd, csr);
             break;
         }
-        // rs1 aka uimm
-        case 0b101:
+        case 0b101: // CSRRWI (rs1 是立即数 uimm)
         {
             ins_zicsr_csrrwi(rs1, rd, csr);
             break;
         }
-        case 0b110:
+        case 0b110: // CSRRSI
         {
             ins_zicsr_csrrsi(rs1, rd, csr);
             break;
         }
-        case 0b111:
+        case 0b111: // CSRRCI
         {
             ins_zicsr_csrrci(rs1, rd, csr);
             break;
@@ -472,7 +515,7 @@ exec(uint32_t ins)
 #endif
         default:
         {
-            fatal("unsupported CSR instruction");
+            fatal("unsupported CSR instruction funct3=%d", funct3);
         }
         }
         break;

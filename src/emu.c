@@ -224,7 +224,8 @@ main(int argc, char **argv)
     }
 #endif
 
-    info("Execution terminated. Return value: 0x%x", g_state.gpr[10]);
+    info("Execution terminated. Return value: 0x%x (final x10 value)",
+         g_state.gpr[10]);
     terminate_logger();
     return 0;
 }
