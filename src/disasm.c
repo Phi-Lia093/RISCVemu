@@ -68,151 +68,6 @@ reg_name(uint32_t id)
     return (id < 32) ? regs[id] : "?";
 }
 
-typedef void (*format_func_t)(char *buf, const char *mnemonic, uint32_t a,
-                              uint32_t b, uint32_t c);
-
-static void
-format_r(char *buf, const char *mnemonic, uint32_t rd, uint32_t rs1,
-         uint32_t rs2)
-{
-    sprintf(buf, "%s %s, %s, %s", mnemonic, reg_name(rd), reg_name(rs1),
-            reg_name(rs2));
-}
-
-static void
-format_i(char *buf, const char *mnemonic, uint32_t rd, uint32_t rs1,
-         uint32_t imm)
-{
-    sprintf(buf, "%s %s, %s, %d", mnemonic, reg_name(rd), reg_name(rs1),
-            (int32_t)imm);
-}
-
-static void
-format_s(char *buf, const char *mnemonic, uint32_t rs2, uint32_t rs1,
-         uint32_t imm)
-{
-    sprintf(buf, "%s %s, %d(%s)", mnemonic, reg_name(rs2), (int32_t)imm,
-            reg_name(rs1));
-}
-
-static void
-format_b(char *buf, const char *mnemonic, uint32_t rs1, uint32_t rs2,
-         uint32_t imm)
-{
-    uint32_t pc = 0;
-#ifdef EMU_H
-    pc = g_state.pc;
-#endif
-    sprintf(buf, "%s %s, %s, 0x%x", mnemonic, reg_name(rs1), reg_name(rs2),
-            pc + (int32_t)imm);
-}
-
-static void
-format_u(char *buf, const char *mnemonic, uint32_t rd, uint32_t imm,
-         __attribute__((unused)) uint32_t unused)
-{
-    sprintf(buf, "%s %s, 0x%x", mnemonic, reg_name(rd), imm);
-}
-
-static void
-format_j(char *buf, const char *mnemonic, uint32_t rd, uint32_t imm,
-         __attribute__((unused)) uint32_t unused)
-{
-    uint32_t pc = 0;
-#ifdef EMU_H
-    pc = g_state.pc;
-#endif
-    sprintf(buf, "%s %s, 0x%x", mnemonic, reg_name(rd), pc + (int32_t)imm);
-}
-
-static void
-format_system(char *buf, const char *mnemonic,
-              __attribute__((unused)) uint32_t unused1,
-              __attribute__((unused)) uint32_t unused2,
-              __attribute__((unused)) uint32_t unused3)
-{
-    sprintf(buf, "%s", mnemonic);
-}
-
-typedef struct
-{
-    uint32_t opcode;
-    uint32_t funct3;
-    uint32_t funct7;
-    const char *mnemonic;
-    format_func_t format;
-    uint32_t type; // 0=uses imm, 1=R-type, 2=store, 3=branch, 4=system,
-                   // 5=U-type, 6=J-type
-} ins_def_t;
-
-static const ins_def_t ins_table[] = {
-    // R-type instructions
-    { 0b0110011, 0b0000000, 0b0000000, "add", format_r, 1 },
-    { 0b0110011, 0b0100000, 0b0000000, "sub", format_r, 1 },
-    { 0b0110011, 0b0000001, 0b0000000, "mul", format_r, 1 },
-    { 0b0110011, 0b0000000, 0b0000001, "sll", format_r, 1 },
-    { 0b0110011, 0b0000001, 0b0000001, "mulh", format_r, 1 },
-    { 0b0110011, 0b0000000, 0b0000010, "slt", format_r, 1 },
-    { 0b0110011, 0b0000001, 0b0000010, "mulsu", format_r, 1 },
-    { 0b0110011, 0b0000000, 0b0000011, "sltu", format_r, 1 },
-    { 0b0110011, 0b0000001, 0b0000011, "mulu", format_r, 1 },
-    { 0b0110011, 0b0000000, 0b0000100, "xor", format_r, 1 },
-    { 0b0110011, 0b0000001, 0b0000100, "div", format_r, 1 },
-    { 0b0110011, 0b0000000, 0b0000101, "srl", format_r, 1 },
-    { 0b0110011, 0b0100000, 0b0000101, "sra", format_r, 1 },
-    { 0b0110011, 0b0000001, 0b0000101, "divu", format_r, 1 },
-    { 0b0110011, 0b0000000, 0b0000110, "or", format_r, 1 },
-    { 0b0110011, 0b0000001, 0b0000110, "rem", format_r, 1 },
-    { 0b0110011, 0b0000000, 0b0000111, "and", format_r, 1 },
-    { 0b0110011, 0b0000001, 0b0000111, "remu", format_r, 1 },
-
-    // I-type ALU
-    { 0b0010011, 0b0000000, 0x7F, "addi", format_i, 0 },
-    { 0b0010011, 0b0000010, 0x7F, "slti", format_i, 0 },
-    { 0b0010011, 0b0000011, 0x7F, "sltiu", format_i, 0 },
-    { 0b0010011, 0b0000100, 0x7F, "xori", format_i, 0 },
-    { 0b0010011, 0b0000110, 0x7F, "ori", format_i, 0 },
-    { 0b0010011, 0b0000111, 0x7F, "andi", format_i, 0 },
-
-    // I-type shifts
-    { 0b0010011, 0b0000001, 0b0000000, "slli", format_i, 0 },
-    { 0b0010011, 0b0000101, 0b0000000, "srli", format_i, 0 },
-    { 0b0010011, 0b0000101, 0b0100000, "srai", format_i, 0 },
-
-    // Loads
-    { 0b0000011, 0b0000000, 0x7F, "lb", format_i, 0 },
-    { 0b0000011, 0b0000001, 0x7F, "lh", format_i, 0 },
-    { 0b0000011, 0b0000010, 0x7F, "lw", format_i, 0 },
-    { 0b0000011, 0b0000100, 0x7F, "lbu", format_i, 0 },
-    { 0b0000011, 0b0000101, 0x7F, "lhu", format_i, 0 },
-
-    // Stores
-    { 0b0100011, 0b0000000, 0x7F, "sb", format_s, 2 },
-    { 0b0100011, 0b0000001, 0x7F, "sh", format_s, 2 },
-    { 0b0100011, 0b0000010, 0x7F, "sw", format_s, 2 },
-
-    // Branches
-    { 0b1100011, 0b0000000, 0x7F, "beq", format_b, 3 },
-    { 0b1100011, 0b0000001, 0x7F, "bne", format_b, 3 },
-    { 0b1100011, 0b0000100, 0x7F, "blt", format_b, 3 },
-    { 0b1100011, 0b0000101, 0x7F, "bge", format_b, 3 },
-    { 0b1100011, 0b0000110, 0x7F, "bltu", format_b, 3 },
-    { 0b1100011, 0b0000111, 0x7F, "bgeu", format_b, 3 },
-
-    // JAL
-    { 0b1101111, 0x7F, 0x7F, "jal", format_j, 6 },
-
-    // U-type
-    { 0b0110111, 0x7F, 0x7F, "lui", format_u, 5 },
-    { 0b0010111, 0x7F, 0x7F, "auipc", format_u, 5 },
-
-    // JALR
-    { 0b1100111, 0x7F, 0x7F, "jalr", format_i, 0 },
-
-    // System
-    { 0b1110011, 0b0000000, 0x7F, "ecall", format_system, 4 },
-};
-
 char *
 disasm(uint32_t ins)
 {
@@ -222,87 +77,373 @@ disasm(uint32_t ins)
     uint32_t rs1 = get_rs1(ins);
     uint32_t rs2 = get_rs2(ins);
     uint32_t rd = get_rd(ins);
-    uint32_t imm = 0;
+
+    // COMPACT extension not supported in disasm
+    if ((opcode & 3) != 3)
+    {
+        sprintf(disasm_buf, "c.<unknown> (0x%04x)", ins & 0xFFFF);
+        return disasm_buf;
+    }
 
     switch (opcode)
     {
-    case 0b0010011:
-    case 0b0000011:
-    case 0b1100111:
-    case 0b1110011:
-        imm = sign_extend_12((ins >> 20) & 0xFFF);
+    // R format
+    case 0b0110011:
+    {
+        // M extension
+        if (funct7 == 0b0000001)
+        {
+            const char *mnemonic = "?";
+            switch (funct3)
+            {
+            case 0:
+                mnemonic = "mul";
+                break;
+            case 1:
+                mnemonic = "mulh";
+                break;
+            case 2:
+                mnemonic = "mulsu";
+                break;
+            case 3:
+                mnemonic = "mulu";
+                break;
+            case 4:
+                mnemonic = "div";
+                break;
+            case 5:
+                mnemonic = "divu";
+                break;
+            case 6:
+                mnemonic = "rem";
+                break;
+            case 7:
+                mnemonic = "remu";
+                break;
+            }
+            sprintf(disasm_buf, "%s %s, %s, %s", mnemonic, reg_name(rd),
+                    reg_name(rs1), reg_name(rs2));
+            return disasm_buf;
+        }
+
+        switch (funct3)
+        {
+        case 0:
+            if (funct7 == 0b0000000)
+                sprintf(disasm_buf, "add %s, %s, %s", reg_name(rd),
+                        reg_name(rs1), reg_name(rs2));
+            else if (funct7 == 0b0100000)
+                sprintf(disasm_buf, "sub %s, %s, %s", reg_name(rd),
+                        reg_name(rs1), reg_name(rs2));
+            else
+                goto unknown;
+            break;
+        case 1:
+            sprintf(disasm_buf, "sll %s, %s, %s", reg_name(rd), reg_name(rs1),
+                    reg_name(rs2));
+            break;
+        case 2:
+            sprintf(disasm_buf, "slt %s, %s, %s", reg_name(rd), reg_name(rs1),
+                    reg_name(rs2));
+            break;
+        case 3:
+            sprintf(disasm_buf, "sltu %s, %s, %s", reg_name(rd), reg_name(rs1),
+                    reg_name(rs2));
+            break;
+        case 4:
+            sprintf(disasm_buf, "xor %s, %s, %s", reg_name(rd), reg_name(rs1),
+                    reg_name(rs2));
+            break;
+        case 5:
+            if (funct7 == 0b0000000)
+                sprintf(disasm_buf, "srl %s, %s, %s", reg_name(rd),
+                        reg_name(rs1), reg_name(rs2));
+            else if (funct7 == 0b0100000)
+                sprintf(disasm_buf, "sra %s, %s, %s", reg_name(rd),
+                        reg_name(rs1), reg_name(rs2));
+            else
+                goto unknown;
+            break;
+        case 6:
+            sprintf(disasm_buf, "or %s, %s, %s", reg_name(rd), reg_name(rs1),
+                    reg_name(rs2));
+            break;
+        case 7:
+            sprintf(disasm_buf, "and %s, %s, %s", reg_name(rd), reg_name(rs1),
+                    reg_name(rs2));
+            break;
+        default:
+            goto unknown;
+        }
         break;
+    }
+
+    // I format ALU
+    case 0b0010011:
+    {
+        uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
+        uint32_t shamt = imm & 0x1F;
+
+        switch (funct3)
+        {
+        case 0:
+            sprintf(disasm_buf, "addi %s, %s, %d", reg_name(rd), reg_name(rs1),
+                    (int32_t)imm);
+            break;
+        case 1:
+            sprintf(disasm_buf, "slli %s, %s, %d", reg_name(rd), reg_name(rs1),
+                    shamt);
+            break;
+        case 2:
+            sprintf(disasm_buf, "slti %s, %s, %d", reg_name(rd), reg_name(rs1),
+                    (int32_t)imm);
+            break;
+        case 3:
+            sprintf(disasm_buf, "sltiu %s, %s, %d", reg_name(rd), reg_name(rs1),
+                    (int32_t)imm);
+            break;
+        case 4:
+            sprintf(disasm_buf, "xori %s, %s, %d", reg_name(rd), reg_name(rs1),
+                    (int32_t)imm);
+            break;
+        case 5:
+            if (funct7 == 0b0000000)
+                sprintf(disasm_buf, "srli %s, %s, %d", reg_name(rd),
+                        reg_name(rs1), shamt);
+            else if (funct7 == 0b0100000)
+                sprintf(disasm_buf, "srai %s, %s, %d", reg_name(rd),
+                        reg_name(rs1), shamt);
+            else
+                goto unknown;
+            break;
+        case 6:
+            sprintf(disasm_buf, "ori %s, %s, %d", reg_name(rd), reg_name(rs1),
+                    (int32_t)imm);
+            break;
+        case 7:
+            sprintf(disasm_buf, "andi %s, %s, %d", reg_name(rd), reg_name(rs1),
+                    (int32_t)imm);
+            break;
+        default:
+            goto unknown;
+        }
+        break;
+    }
+
+    // LOAD
+    case 0b0000011:
+    {
+        uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
+
+        switch (funct3)
+        {
+        case 0:
+            sprintf(disasm_buf, "lb %s, %d(%s)", reg_name(rd), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        case 1:
+            sprintf(disasm_buf, "lh %s, %d(%s)", reg_name(rd), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        case 2:
+            sprintf(disasm_buf, "lw %s, %d(%s)", reg_name(rd), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        case 4:
+            sprintf(disasm_buf, "lbu %s, %d(%s)", reg_name(rd), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        case 5:
+            sprintf(disasm_buf, "lhu %s, %d(%s)", reg_name(rd), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        default:
+            goto unknown;
+        }
+        break;
+    }
+
+    // STORE
     case 0b0100011:
-        imm = ((ins >> 25) & 0x7F) << 5;
+    {
+        uint32_t imm = ((ins >> 25) & 0x7F) << 5;
         imm |= ((ins >> 7) & 0x1F);
         imm = sign_extend_12(imm);
+
+        switch (funct3)
+        {
+        case 0:
+            sprintf(disasm_buf, "sb %s, %d(%s)", reg_name(rs2), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        case 1:
+            sprintf(disasm_buf, "sh %s, %d(%s)", reg_name(rs2), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        case 2:
+            sprintf(disasm_buf, "sw %s, %d(%s)", reg_name(rs2), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        default:
+            goto unknown;
+        }
         break;
+    }
+
+    // BRANCH
     case 0b1100011:
-        imm = ((ins >> 31) & 0x1) << 12;
+    {
+        uint32_t imm = ((ins >> 31) & 0x1) << 12;
         imm |= ((ins >> 25) & 0x3F) << 5;
         imm |= ((ins >> 8) & 0xF) << 1;
         imm |= ((ins >> 7) & 0x1) << 11;
         imm = sign_extend_13(imm);
+        uint32_t pc = 0;
+#ifdef EMU_H
+        pc = g_state.pc;
+#endif
+
+        switch (funct3)
+        {
+        case 0:
+            sprintf(disasm_buf, "beq %s, %s, 0x%x", reg_name(rs1),
+                    reg_name(rs2), pc + (int32_t)imm);
+            break;
+        case 1:
+            sprintf(disasm_buf, "bne %s, %s, 0x%x", reg_name(rs1),
+                    reg_name(rs2), pc + (int32_t)imm);
+            break;
+        case 4:
+            sprintf(disasm_buf, "blt %s, %s, 0x%x", reg_name(rs1),
+                    reg_name(rs2), pc + (int32_t)imm);
+            break;
+        case 5:
+            sprintf(disasm_buf, "bge %s, %s, 0x%x", reg_name(rs1),
+                    reg_name(rs2), pc + (int32_t)imm);
+            break;
+        case 6:
+            sprintf(disasm_buf, "bltu %s, %s, 0x%x", reg_name(rs1),
+                    reg_name(rs2), pc + (int32_t)imm);
+            break;
+        case 7:
+            sprintf(disasm_buf, "bgeu %s, %s, 0x%x", reg_name(rs1),
+                    reg_name(rs2), pc + (int32_t)imm);
+            break;
+        default:
+            goto unknown;
+        }
         break;
+    }
+
+    // JAL
     case 0b1101111:
-        imm = ((ins >> 31) & 0x1) << 20;
+    {
+        uint32_t imm = ((ins >> 31) & 0x1) << 20;
         imm |= ((ins >> 21) & 0x3FF) << 1;
         imm |= ((ins >> 20) & 0x1) << 11;
         imm |= ((ins >> 12) & 0xFF) << 12;
         imm = sign_extend_21(imm);
+        uint32_t pc = 0;
+#ifdef EMU_H
+        pc = g_state.pc;
+#endif
+        sprintf(disasm_buf, "jal %s, 0x%x", reg_name(rd), pc + (int32_t)imm);
         break;
+    }
+
+    // LUI
     case 0b0110111:
-    case 0b0010111:
-        imm = ins & 0xFFFFF000;
+    {
+        uint32_t imm = ins & 0xFFFFF000;
+        sprintf(disasm_buf, "lui %s, 0x%x", reg_name(rd), imm);
         break;
     }
 
-    uint32_t shamt = (ins >> 20) & 0x1F;
-
-    for (size_t i = 0; i < sizeof(ins_table) / sizeof(ins_table[0]); i++)
+    // AUIPC
+    case 0b0010111:
     {
-        const ins_def_t *def = &ins_table[i];
-
-        if (opcode == def->opcode)
-        {
-            if (def->funct3 != 0x7F && funct3 != def->funct3) continue;
-            if (def->funct7 != 0x7F && funct7 != def->funct7) continue;
-
-            switch (def->type)
-            {
-            case 1: // R-type
-                def->format(disasm_buf, def->mnemonic, rd, rs1, rs2);
-                break;
-            case 2: // Store
-                def->format(disasm_buf, def->mnemonic, rs2, rs1, imm);
-                break;
-            case 3: // Branch
-                def->format(disasm_buf, def->mnemonic, rs1, rs2, imm);
-                break;
-            case 4: // System
-                def->format(disasm_buf, def->mnemonic, 0, 0, 0);
-                break;
-            case 5: // U-type
-                def->format(disasm_buf, def->mnemonic, rd, imm, 0);
-                break;
-            case 6: // J-type
-                def->format(disasm_buf, def->mnemonic, rd, imm, 0);
-                break;
-            default: // I-type
-                if (def->funct3 == 0b0000001 || def->funct3 == 0b0000101)
-                {
-                    def->format(disasm_buf, def->mnemonic, rd, rs1, shamt);
-                }
-                else
-                {
-                    def->format(disasm_buf, def->mnemonic, rd, rs1, imm);
-                }
-                break;
-            }
-            return disasm_buf;
-        }
+        uint32_t imm = ins & 0xFFFFF000;
+        sprintf(disasm_buf, "auipc %s, 0x%x", reg_name(rd), imm);
+        break;
     }
 
-    sprintf(disasm_buf, "unknown (0x%08x)", ins);
+    // JALR
+    case 0b1100111:
+    {
+        uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
+        sprintf(disasm_buf, "jalr %s, %s, %d", reg_name(rd), reg_name(rs1),
+                (int32_t)imm);
+        break;
+    }
+
+    // SYSTEM
+    case 0b1110011:
+    {
+        uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
+        uint32_t csr = (ins >> 20) & 0xFFF;
+
+        switch (funct3)
+        {
+        case 0:
+            if (imm == 0)
+                sprintf(disasm_buf, "ecall");
+            else if (imm == 1)
+                sprintf(disasm_buf, "ebreak");
+            else
+                sprintf(disasm_buf, "unknown system (imm=%d)", (int32_t)imm);
+            break;
+        case 0b001:
+            sprintf(disasm_buf, "csrrw %s, %s, 0x%03x", reg_name(rd),
+                    reg_name(rs1), csr);
+            break;
+        case 0b010:
+            sprintf(disasm_buf, "csrrs %s, %s, 0x%03x", reg_name(rd),
+                    reg_name(rs1), csr);
+            break;
+        case 0b011:
+            sprintf(disasm_buf, "csrrc %s, %s, 0x%03x", reg_name(rd),
+                    reg_name(rs1), csr);
+            break;
+        case 0b101:
+            sprintf(disasm_buf, "csrrwi %s, %d, 0x%03x", reg_name(rd), rs1,
+                    csr);
+            break;
+        case 0b110:
+            sprintf(disasm_buf, "csrrsi %s, %d, 0x%03x", reg_name(rd), rs1,
+                    csr);
+            break;
+        case 0b111:
+            sprintf(disasm_buf, "csrrci %s, %d, 0x%03x", reg_name(rd), rs1,
+                    csr);
+            break;
+        default:
+            goto unknown;
+        }
+        break;
+    }
+
+    // FENCE
+    case 0b0001111:
+    {
+        switch (funct3)
+        {
+        case 0:
+            sprintf(disasm_buf, "fence");
+            break;
+        case 1:
+            sprintf(disasm_buf, "fence.i");
+            break;
+        default:
+            goto unknown;
+        }
+        break;
+    }
+
+    default:
+    unknown:
+        sprintf(disasm_buf, "unknown (0x%08x)", ins);
+        break;
+    }
+
     return disasm_buf;
 }
