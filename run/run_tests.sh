@@ -17,12 +17,18 @@ if [ -z "$SOURCE_TEST_DIR" ]; then
 fi
 
 BASE_ADDR="0x80000000"
-LOG_FILE="test_results.log"
+
+BUILD_DIR="build"
+LOG_FILE="$BUILD_DIR/test_results.log"
+FULL_LOG_DIR="$BUILD_DIR/test_logs"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
+
+mkdir -p "$BUILD_DIR"
+mkdir -p "$FULL_LOG_DIR"
 
 > "$LOG_FILE"
 
@@ -32,6 +38,8 @@ echo "  emulator executable: $EMULATOR"
 echo "  test directory: $TEST_DIR"
 echo "  source test directory: $SOURCE_TEST_DIR"
 echo "  base address: $BASE_ADDR"
+echo "  summary log: $LOG_FILE"
+echo "  full logs: $FULL_LOG_DIR/"
 echo "=========================================="
 echo ""
 
@@ -51,10 +59,14 @@ for bin_file in "$TEST_DIR"/*.bin; do
 
     filename=$(basename "$bin_file" .bin)
 
+    test_log_file="$FULL_LOG_DIR/${filename}.log"
+
     echo -n "[$filename] RUNNING... "
 
     output=$("$EMULATOR" "$bin_file" "$BASE_ADDR" 2>&1)
     exit_code=$?
+
+    echo "$output" > "$test_log_file"
 
     last_line=$(echo "$output" | tail -1)
 
@@ -67,6 +79,9 @@ for bin_file in "$TEST_DIR"/*.bin; do
         ((FAILED++))
         echo "$filename: FAIL" >> "$LOG_FILE"
         echo "  Last line: $last_line" >> "$LOG_FILE"
+        if echo "$output" | grep -q "FATAL"; then
+            echo "  FATAL error detected - see $FULL_LOG_DIR/${filename}.log for details" >> "$LOG_FILE"
+        fi
     fi
 
     ((TOTAL++))
@@ -78,7 +93,16 @@ echo "  TEST COMPLETED！"
 echo "  TOTAL: $TOTAL"
 echo -e "  PASSED: ${GREEN}$PASSED${NC}"
 echo -e "  FAILED: ${RED}$FAILED${NC}"
-echo "  LOG: $LOG_FILE"
+echo "  SUMMARY LOG: $LOG_FILE"
+echo "  FULL LOGS: $FULL_LOG_DIR/"
 echo "=========================================="
+
+if [ $FAILED -gt 0 ]; then
+    echo ""
+    echo -e "${RED}Failed tests:${NC}"
+    grep "FAIL" "$LOG_FILE" | while read line; do
+        echo "  $line"
+    done
+fi
 
 exit $FAILED

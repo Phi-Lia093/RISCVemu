@@ -300,11 +300,13 @@ exec(uint32_t ins)
             }
             case 0x02:
             {
+                info("LR.W: rs1=0x%08x, rd=0x%08x\n", rs1, rd);
                 insa_r_lr_w(rs1, rd);
                 break;
             }
             case 0x03:
             {
+                info("SC.W: rs1=0x%08x, rs2=0x%08x, rd=0x%08x\n", rs1, rs2, rd);
                 insa_r_sc_w(rs1, rs2, rd);
                 break;
             }
@@ -313,7 +315,7 @@ exec(uint32_t ins)
                 insa_r_amoxor_w(rs1, rs2, rd);
                 break;
             }
-            case 0x0A:
+            case 0x08:
             {
                 insa_r_amoor_w(rs1, rs2, rd);
                 break;
@@ -334,6 +336,8 @@ exec(uint32_t ins)
                 break;
             }
             default:
+                info("Invalid atomic: funct5=0x%02x, ins=0x%08x\n", funct5,
+                     ins);
                 fatal("invalid atomic instruction");
             }
         }
@@ -431,54 +435,55 @@ exec(uint32_t ins)
 
         switch (funct3)
         {
-            case 0:
+        case 0:
+        {
+            if (rs1 == 0 && rd == 0)
             {
-                if (rs1 == 0 && rd == 0)
+                switch (imm)
                 {
-                    switch (imm)
-                    {
-                    case 0x000: // ecall
-                        insi_i_ecall();
-                        break;
-                    case 0x001: // ebreak
-                        insi_i_ebreak();
-                        break;
-                    case 0x102: // sret
-                        ins_sret();
-                        break;
-                    case 0x302: // mret
-                        ins_mret();
-                        break;
-                    case 0x702: // mnret
-                        ins_mnret();
-                        break;
-                    case 0x104: // sctrclr
-                        ins_sctrclr();
-                        break;
-                    case 0x105: // wfi
-                        ins_wfi();
-                        break;
-                    case 0x009: // sfence.vma
-                        ins_sfence_vma();
-                        break;
-                    default:
-                        fatal("illegal system instruction imm=0x%x", imm);
-                    }
-                }
-                else if (imm == 0x009)
-                {
-                    if (rd != 0) {
-                        fatal("sfence.vma: rd must be 0, got rd=%d", rd);
-                    }
+                case 0x000: // ecall
+                    insi_i_ecall();
+                    break;
+                case 0x001: // ebreak
+                    insi_i_ebreak();
+                    break;
+                case 0x102: // sret
+                    ins_sret();
+                    break;
+                case 0x302: // mret
+                    ins_mret();
+                    break;
+                case 0x702: // mnret
+                    ins_mnret();
+                    break;
+                case 0x104: // sctrclr
+                    ins_sctrclr();
+                    break;
+                case 0x105: // wfi
+                    ins_wfi();
+                    break;
+                case 0x009: // sfence.vma
                     ins_sfence_vma();
+                    break;
+                default:
+                    fatal("illegal system instruction imm=0x%x", imm);
                 }
-                else
-                {
-                    fatal("illegal system instruction imm=0x%x rs1=%d rd=%d", imm,
-                          rs1, rd);
-                }
-                break;
             }
+            else if (imm == 0x009)
+            {
+                if (rd != 0)
+                {
+                    fatal("sfence.vma: rd must be 0, got rd=%d", rd);
+                }
+                ins_sfence_vma();
+            }
+            else
+            {
+                fatal("illegal system instruction imm=0x%x rs1=%d rd=%d", imm,
+                      rs1, rd);
+            }
+            break;
+        }
 
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
         case 0b001: // CSRRW

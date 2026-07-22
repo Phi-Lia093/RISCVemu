@@ -28,7 +28,7 @@ insm_r_mulsu(uint32_t rs2, uint32_t rs1, uint32_t rd)
 {
     int32_t v1 = (int32_t)reg_read(rs1);
     uint32_t v2 = reg_read(rs2);
-    int64_t result = (int64_t)v1 * (int64_t)(int32_t)v2;
+    int64_t result = (int64_t)v1 * (uint64_t)v2;
     reg_write(rd, (uint32_t)(result >> 32));
 }
 

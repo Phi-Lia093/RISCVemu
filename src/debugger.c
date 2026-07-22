@@ -12,6 +12,8 @@ static char last_cmd[256] = { 0 };
 
 static int show_disasm = 1; // 1 = show disassembly, 0 = show raw hex
 
+static void cmd_set_pc(char *args);
+static void cmd_set_register(char *args);
 static void cmd_single_step(void);
 static void cmd_continue(void);
 static void cmd_quit(void);
@@ -279,6 +281,8 @@ cmd_help(void)
     printf("  c           - Continue execution\n");
     printf("  q           - Quit emulator\n");
     printf("  r           - Print registers\n");
+    printf("  p <addr>    - Set Program Counter (PC)\n");
+    printf("  R <reg> <v> - Set register value (reg: 0-31 or name)\n");
     printf("  m <addr>... - Display memory at address(es)\n");
     printf("  d <s> <e>   - Dump memory range\n");
     printf("  B <a> [c]   - Dump bytes from address (count default=16)\n");
@@ -290,6 +294,96 @@ cmd_help(void)
     printf("  C           - Clear breakpoint\n");
     printf("  h/?         - This help\n");
     printf("  <Enter>     - Repeat last command\n");
+}
+
+static void
+cmd_set_pc(char *args)
+{
+    uint32_t addr;
+
+    if (sscanf(args, "%x", &addr) == 1)
+    {
+        if (addr & 0x3)
+        {
+            printf("Warning: PC 0x%08x is not 4-byte aligned\n", addr);
+        }
+        g_state.pc = addr;
+        printf("PC set to 0x%08x\n", g_state.pc);
+    }
+    else
+    {
+        printf("usage: p <address>\n");
+    }
+}
+
+static void
+cmd_set_register(char *args)
+{
+    const char *reg_names[]
+        = { "zero", "ra", "sp",  "gp",  "tp", "t0", "t1", "t2",
+            "s0",   "s1", "a0",  "a1",  "a2", "a3", "a4", "a5",
+            "a6",   "a7", "s2",  "s3",  "s4", "s5", "s6", "s7",
+            "s8",   "s9", "s10", "s11", "t3", "t4", "t5", "t6" };
+
+    uint32_t value;
+    int reg_num = -1;
+
+    char *token = strtok(args, " \t\n");
+    if (!token)
+    {
+        printf("usage: R <register> <value>\n");
+        printf("  register: 0-31 or name (e.g., a0, sp, t0)\n");
+        return;
+    }
+
+    if (sscanf(token, "%d", &reg_num) == 1)
+    {
+        if (reg_num < 0 || reg_num > 31)
+        {
+            printf("Error: register number must be 0-31\n");
+            return;
+        }
+    }
+    else
+    {
+        int found = 0;
+        for (int i = 0; i < 32; i++)
+        {
+            if (strcasecmp(token, reg_names[i]) == 0)
+            {
+                reg_num = i;
+                found = 1;
+                break;
+            }
+        }
+        if (!found)
+        {
+            printf("Error: unknown register '%s'\n", token);
+            return;
+        }
+    }
+
+    token = strtok(NULL, " \t\n");
+    if (!token)
+    {
+        printf("Error: value required\n");
+        return;
+    }
+
+    if (sscanf(token, "%x", &value) != 1)
+    {
+        printf("Error: invalid value '%s'\n", token);
+        return;
+    }
+
+    if (reg_num == 0)
+    {
+        printf("Warning: x0 (zero) register is read-only, value remains 0\n");
+        return;
+    }
+
+    g_state.gpr[reg_num] = value;
+    printf("x%d (%s) = 0x%08x\n", reg_num, reg_names[reg_num], value);
 }
 
 void
@@ -367,6 +461,14 @@ tick_debugger(void)
 
         case 'r':
             cmd_registers();
+            continue;
+
+        case 'p':
+            cmd_set_pc(args);
+            continue;
+
+        case 'R':
+            cmd_set_register(args);
             continue;
 
         case 'm':
