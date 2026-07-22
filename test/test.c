@@ -4,6 +4,13 @@ _start(void) __attribute__((section(".text._start")));
 int
 _main();
 
+void debug_print(char *str)
+{
+    while (*str) {
+        *(volatile unsigned int *)0x10000000 = *str++;
+    }
+}
+
 void
 _start(void)
 {
@@ -16,5 +23,6 @@ _start(void)
 int
 _main()
 {
+    debug_print("Hello, World!\n");
     return 0x325;
 }

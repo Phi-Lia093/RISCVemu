@@ -4,9 +4,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <config.h>
 #include <emu.h>
 
 #define MEM_SIZE (4 * 1024 * 1024 * 1024L - 4096L)
+
+#ifdef CONFIG_ENABLE_UART_DEVICE
+#include <device/uart.h>
+#endif
 
 void init_mem(void);
 
@@ -70,6 +75,9 @@ static inline void
 mem_write32(uint32_t addr, uint32_t val)
 {
     if (unlikely(addr >= MEM_SIZE - 3)) return;
+#ifdef CONFIG_ENABLE_UART_DEVICE
+    if (unlikely(addr == UART_OUT)) uart_putc(val);
+#endif
     *(uint32_t *)(g_state.main_memory + addr) = val;
 }
 
