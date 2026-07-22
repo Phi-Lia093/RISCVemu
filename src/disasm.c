@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static char disasm_buf[128];
+static char disasm_buf[1024];
 
 static inline uint32_t
 get_opcode(uint32_t ins)
@@ -85,7 +85,7 @@ disasm(uint32_t ins)
         return disasm_buf;
     }
 
-    switch (opcode)
+    switch (opcode) // keep consistent with exec.c
     {
     // R format
     case 0b0110011:
@@ -120,60 +120,82 @@ disasm(uint32_t ins)
             case 7:
                 mnemonic = "remu";
                 break;
+            default:
+                goto unknown;
             }
             sprintf(disasm_buf, "%s %s, %s, %s", mnemonic, reg_name(rd),
                     reg_name(rs1), reg_name(rs2));
-            return disasm_buf;
+            break;
         }
-
-        switch (funct3)
+        else
         {
-        case 0:
-            if (funct7 == 0b0000000)
-                sprintf(disasm_buf, "add %s, %s, %s", reg_name(rd),
-                        reg_name(rs1), reg_name(rs2));
-            else if (funct7 == 0b0100000)
-                sprintf(disasm_buf, "sub %s, %s, %s", reg_name(rd),
-                        reg_name(rs1), reg_name(rs2));
-            else
+            switch (funct3)
+            {
+            case 0: // ADD / SUB
+                if (funct7 == 0b0000000)
+                    sprintf(disasm_buf, "add %s, %s, %s", reg_name(rd),
+                            reg_name(rs1), reg_name(rs2));
+                else if (funct7 == 0b0100000)
+                    sprintf(disasm_buf, "sub %s, %s, %s", reg_name(rd),
+                            reg_name(rs1), reg_name(rs2));
+                else
+                    goto unknown;
+                break;
+            case 1: // SLL
+                if (funct7 == 0b0000000)
+                    sprintf(disasm_buf, "sll %s, %s, %s", reg_name(rd),
+                            reg_name(rs1), reg_name(rs2));
+                else
+                    goto unknown;
+                break;
+            case 2: // SLT
+                if (funct7 == 0b0000000)
+                    sprintf(disasm_buf, "slt %s, %s, %s", reg_name(rd),
+                            reg_name(rs1), reg_name(rs2));
+                else
+                    goto unknown;
+                break;
+            case 3: // SLTU
+                if (funct7 == 0b0000000)
+                    sprintf(disasm_buf, "sltu %s, %s, %s", reg_name(rd),
+                            reg_name(rs1), reg_name(rs2));
+                else
+                    goto unknown;
+                break;
+            case 4: // XOR
+                if (funct7 == 0b0000000)
+                    sprintf(disasm_buf, "xor %s, %s, %s", reg_name(rd),
+                            reg_name(rs1), reg_name(rs2));
+                else
+                    goto unknown;
+                break;
+            case 5: // SRL / SRA
+                if (funct7 == 0b0000000)
+                    sprintf(disasm_buf, "srl %s, %s, %s", reg_name(rd),
+                            reg_name(rs1), reg_name(rs2));
+                else if (funct7 == 0b0100000)
+                    sprintf(disasm_buf, "sra %s, %s, %s", reg_name(rd),
+                            reg_name(rs1), reg_name(rs2));
+                else
+                    goto unknown;
+                break;
+            case 6: // OR
+                if (funct7 == 0b0000000)
+                    sprintf(disasm_buf, "or %s, %s, %s", reg_name(rd),
+                            reg_name(rs1), reg_name(rs2));
+                else
+                    goto unknown;
+                break;
+            case 7: // AND
+                if (funct7 == 0b0000000)
+                    sprintf(disasm_buf, "and %s, %s, %s", reg_name(rd),
+                            reg_name(rs1), reg_name(rs2));
+                else
+                    goto unknown;
+                break;
+            default:
                 goto unknown;
-            break;
-        case 1:
-            sprintf(disasm_buf, "sll %s, %s, %s", reg_name(rd), reg_name(rs1),
-                    reg_name(rs2));
-            break;
-        case 2:
-            sprintf(disasm_buf, "slt %s, %s, %s", reg_name(rd), reg_name(rs1),
-                    reg_name(rs2));
-            break;
-        case 3:
-            sprintf(disasm_buf, "sltu %s, %s, %s", reg_name(rd), reg_name(rs1),
-                    reg_name(rs2));
-            break;
-        case 4:
-            sprintf(disasm_buf, "xor %s, %s, %s", reg_name(rd), reg_name(rs1),
-                    reg_name(rs2));
-            break;
-        case 5:
-            if (funct7 == 0b0000000)
-                sprintf(disasm_buf, "srl %s, %s, %s", reg_name(rd),
-                        reg_name(rs1), reg_name(rs2));
-            else if (funct7 == 0b0100000)
-                sprintf(disasm_buf, "sra %s, %s, %s", reg_name(rd),
-                        reg_name(rs1), reg_name(rs2));
-            else
-                goto unknown;
-            break;
-        case 6:
-            sprintf(disasm_buf, "or %s, %s, %s", reg_name(rd), reg_name(rs1),
-                    reg_name(rs2));
-            break;
-        case 7:
-            sprintf(disasm_buf, "and %s, %s, %s", reg_name(rd), reg_name(rs1),
-                    reg_name(rs2));
-            break;
-        default:
-            goto unknown;
+            }
         }
         break;
     }
@@ -186,27 +208,27 @@ disasm(uint32_t ins)
 
         switch (funct3)
         {
-        case 0:
+        case 0: // ADDI
             sprintf(disasm_buf, "addi %s, %s, %d", reg_name(rd), reg_name(rs1),
                     (int32_t)imm);
             break;
-        case 1:
+        case 1: // SLLI
             sprintf(disasm_buf, "slli %s, %s, %d", reg_name(rd), reg_name(rs1),
                     shamt);
             break;
-        case 2:
+        case 2: // SLTI
             sprintf(disasm_buf, "slti %s, %s, %d", reg_name(rd), reg_name(rs1),
                     (int32_t)imm);
             break;
-        case 3:
+        case 3: // SLTIU
             sprintf(disasm_buf, "sltiu %s, %s, %d", reg_name(rd), reg_name(rs1),
                     (int32_t)imm);
             break;
-        case 4:
+        case 4: // XORI
             sprintf(disasm_buf, "xori %s, %s, %d", reg_name(rd), reg_name(rs1),
                     (int32_t)imm);
             break;
-        case 5:
+        case 5: // SRLI / SRAI
             if (funct7 == 0b0000000)
                 sprintf(disasm_buf, "srli %s, %s, %d", reg_name(rd),
                         reg_name(rs1), shamt);
@@ -216,11 +238,11 @@ disasm(uint32_t ins)
             else
                 goto unknown;
             break;
-        case 6:
+        case 6: // ORI
             sprintf(disasm_buf, "ori %s, %s, %d", reg_name(rd), reg_name(rs1),
                     (int32_t)imm);
             break;
-        case 7:
+        case 7: // ANDI
             sprintf(disasm_buf, "andi %s, %s, %d", reg_name(rd), reg_name(rs1),
                     (int32_t)imm);
             break;
@@ -237,23 +259,23 @@ disasm(uint32_t ins)
 
         switch (funct3)
         {
-        case 0:
+        case 0: // LB
             sprintf(disasm_buf, "lb %s, %d(%s)", reg_name(rd), (int32_t)imm,
                     reg_name(rs1));
             break;
-        case 1:
+        case 1: // LH
             sprintf(disasm_buf, "lh %s, %d(%s)", reg_name(rd), (int32_t)imm,
                     reg_name(rs1));
             break;
-        case 2:
+        case 2: // LW
             sprintf(disasm_buf, "lw %s, %d(%s)", reg_name(rd), (int32_t)imm,
                     reg_name(rs1));
             break;
-        case 4:
+        case 4: // LBU
             sprintf(disasm_buf, "lbu %s, %d(%s)", reg_name(rd), (int32_t)imm,
                     reg_name(rs1));
             break;
-        case 5:
+        case 5: // LHU
             sprintf(disasm_buf, "lhu %s, %d(%s)", reg_name(rd), (int32_t)imm,
                     reg_name(rs1));
             break;
@@ -272,15 +294,15 @@ disasm(uint32_t ins)
 
         switch (funct3)
         {
-        case 0:
+        case 0: // SB
             sprintf(disasm_buf, "sb %s, %d(%s)", reg_name(rs2), (int32_t)imm,
                     reg_name(rs1));
             break;
-        case 1:
+        case 1: // SH
             sprintf(disasm_buf, "sh %s, %d(%s)", reg_name(rs2), (int32_t)imm,
                     reg_name(rs1));
             break;
-        case 2:
+        case 2: // SW
             sprintf(disasm_buf, "sw %s, %d(%s)", reg_name(rs2), (int32_t)imm,
                     reg_name(rs1));
             break;
@@ -305,27 +327,27 @@ disasm(uint32_t ins)
 
         switch (funct3)
         {
-        case 0:
+        case 0: // BEQ
             sprintf(disasm_buf, "beq %s, %s, 0x%x", reg_name(rs1),
                     reg_name(rs2), pc + (int32_t)imm);
             break;
-        case 1:
+        case 1: // BNE
             sprintf(disasm_buf, "bne %s, %s, 0x%x", reg_name(rs1),
                     reg_name(rs2), pc + (int32_t)imm);
             break;
-        case 4:
+        case 4: // BLT
             sprintf(disasm_buf, "blt %s, %s, 0x%x", reg_name(rs1),
                     reg_name(rs2), pc + (int32_t)imm);
             break;
-        case 5:
+        case 5: // BGE
             sprintf(disasm_buf, "bge %s, %s, 0x%x", reg_name(rs1),
                     reg_name(rs2), pc + (int32_t)imm);
             break;
-        case 6:
+        case 6: // BLTU
             sprintf(disasm_buf, "bltu %s, %s, 0x%x", reg_name(rs1),
                     reg_name(rs2), pc + (int32_t)imm);
             break;
-        case 7:
+        case 7: // BGEU
             sprintf(disasm_buf, "bgeu %s, %s, 0x%x", reg_name(rs1),
                     reg_name(rs2), pc + (int32_t)imm);
             break;
@@ -392,27 +414,27 @@ disasm(uint32_t ins)
             else
                 sprintf(disasm_buf, "unknown system (imm=%d)", (int32_t)imm);
             break;
-        case 0b001:
+        case 0b001: // CSRRW
             sprintf(disasm_buf, "csrrw %s, %s, 0x%03x", reg_name(rd),
                     reg_name(rs1), csr);
             break;
-        case 0b010:
+        case 0b010: // CSRRS
             sprintf(disasm_buf, "csrrs %s, %s, 0x%03x", reg_name(rd),
                     reg_name(rs1), csr);
             break;
-        case 0b011:
+        case 0b011: // CSRRC
             sprintf(disasm_buf, "csrrc %s, %s, 0x%03x", reg_name(rd),
                     reg_name(rs1), csr);
             break;
-        case 0b101:
+        case 0b101: // CSRRWI
             sprintf(disasm_buf, "csrrwi %s, %d, 0x%03x", reg_name(rd), rs1,
                     csr);
             break;
-        case 0b110:
+        case 0b110: // CSRRWI
             sprintf(disasm_buf, "csrrsi %s, %d, 0x%03x", reg_name(rd), rs1,
                     csr);
             break;
-        case 0b111:
+        case 0b111: // CSRRCI
             sprintf(disasm_buf, "csrrci %s, %d, 0x%03x", reg_name(rd), rs1,
                     csr);
             break;
@@ -427,10 +449,10 @@ disasm(uint32_t ins)
     {
         switch (funct3)
         {
-        case 0:
+        case 0: // FENCE
             sprintf(disasm_buf, "fence");
             break;
-        case 1:
+        case 1: // FENCE.I
             sprintf(disasm_buf, "fence.i");
             break;
         default:

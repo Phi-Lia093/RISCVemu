@@ -3,9 +3,10 @@ ENTRY(_start)
 
 SECTIONS
 {
-    . = 0x0;
+    . = 0x1000;
 
     .text : {
+        . = ALIGN(16);
         KEEP(*(.text._start))
         *(.text)
         . = ALIGN(16);

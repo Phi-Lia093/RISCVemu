@@ -36,7 +36,14 @@ add_custom_target(mktest
 )
 
 add_custom_target(run
-    COMMAND ./RISCVemu test.bin 0
+    COMMAND ./RISCVemu test.bin 0x1000
+    WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
+    DEPENDS ${PROJECT_NAME}
+    VERBATIM
+)
+
+add_custom_target(debug
+    COMMAND ./RISCVemu test.bin 0x1000 -d
     WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
     DEPENDS ${PROJECT_NAME}
     VERBATIM
