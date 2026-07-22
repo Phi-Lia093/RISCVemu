@@ -8,6 +8,6 @@
 void
 init_mem(void)
 {
-    g_state.main_memory = (uint8_t *)calloc(sizeof(uint8_t), MEM_SIZE);
-    g_state.mmu_flags = (uint32_t *)calloc(sizeof(uint32_t), MEM_SIZE);
+    g_state.main_memory = (uint8_t *)calloc(MEM_SIZE, sizeof(uint8_t));
+    g_state.mmu_flags = (uint32_t *)calloc(MEM_SIZE, sizeof(uint32_t));
 }

@@ -424,62 +424,61 @@ exec(uint32_t ins)
     // SYSTEM
     case 0b1110011:
     {
-        uint32_t imm
-            = (ins >> 20)
-              & 0xFFF; // 不需要 sign_extend，对于 SYSTEM 指令是无符号的
+        uint32_t imm = (ins >> 20) & 0xFFF;
         uint32_t csr = (ins >> 20) & 0xFFF;
         uint32_t rs1 = (ins >> 15) & 0x1F;
         uint32_t rd = (ins >> 7) & 0x1F;
 
         switch (funct3)
         {
-        case 0: // 特权指令 (ecall, ebreak, sret, mret, wfi, sfence.vma 等)
-        {
-            // 先提取关键字段判断
-            if (rs1 == 0 && rd == 0)
-            { // 注意：对于 SYSTEM 指令，rd 字段也是 0
-                // rs1=0, rd=0 的情况：ecall, ebreak, sret, mret, mnret, wfi,
-                // sctrclr
-                switch (imm)
+            case 0:
+            {
+                if (rs1 == 0 && rd == 0)
                 {
-                case 0x000: // ecall
-                    insi_i_ecall();
-                    break;
-                case 0x001: // ebreak
-                    insi_i_ebreak();
-                    break;
-                case 0x100: // sret (正确的编码)
-                    ins_sret();
-                    break;
-                case 0x300: // mret (正确的编码)
-                    ins_mret();
-                    break;
-                case 0x700: // mnret (正确的编码)
-                    ins_mnret();
-                    break;
-                case 0x104: // sctrclr (正确的编码)
-                    ins_sctrclr();
-                    break;
-                case 0x105: // wfi (正确的编码，0x105 不是 0x102)
-                    ins_wfi();
-                    break;
-                default:
-                    fatal("illegal system instruction imm=0x%x", imm);
+                    switch (imm)
+                    {
+                    case 0x000: // ecall
+                        insi_i_ecall();
+                        break;
+                    case 0x001: // ebreak
+                        insi_i_ebreak();
+                        break;
+                    case 0x102: // sret
+                        ins_sret();
+                        break;
+                    case 0x302: // mret
+                        ins_mret();
+                        break;
+                    case 0x702: // mnret
+                        ins_mnret();
+                        break;
+                    case 0x104: // sctrclr
+                        ins_sctrclr();
+                        break;
+                    case 0x105: // wfi
+                        ins_wfi();
+                        break;
+                    case 0x009: // sfence.vma
+                        ins_sfence_vma();
+                        break;
+                    default:
+                        fatal("illegal system instruction imm=0x%x", imm);
+                    }
                 }
+                else if (imm == 0x009)
+                {
+                    if (rd != 0) {
+                        fatal("sfence.vma: rd must be 0, got rd=%d", rd);
+                    }
+                    ins_sfence_vma();
+                }
+                else
+                {
+                    fatal("illegal system instruction imm=0x%x rs1=%d rd=%d", imm,
+                          rs1, rd);
+                }
+                break;
             }
-            else if (imm == 0)
-            {
-                // sfence.vma: imm=0, rs1/rd 可以是非零值
-                // rs1 是地址寄存器，rd 应该是 0 (但规范中 rd 字段保留)
-                ins_sfence_vma();
-            }
-            else
-            {
-                fatal("illegal system instruction imm=0x%x rs1=%d rd=%d", imm,
-                      rs1, rd);
-            }
-            break;
-        }
 
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
         case 0b001: // CSRRW
@@ -497,7 +496,7 @@ exec(uint32_t ins)
             ins_zicsr_csrrc(rs1, rd, csr);
             break;
         }
-        case 0b101: // CSRRWI (rs1 是立即数 uimm)
+        case 0b101: // CSRRWI
         {
             ins_zicsr_csrrwi(rs1, rd, csr);
             break;
