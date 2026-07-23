@@ -18,11 +18,43 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef DISASM_H
-#define DISASM_H
+#ifndef HASHMAP_U32_H
+#define HASHMAP_U32_H
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
-char *disasm(uint32_t ins);
+struct hashmap_entry
+{
+    uint32_t key;
+    uint32_t value;
+    bool occupied;
+    bool deleted;
+};
+
+struct hashmap
+{
+    struct hashmap_entry *entries;
+    size_t capacity;
+    size_t size;
+    size_t tombstone_count;
+};
+
+void hashmap_init(struct hashmap *map);
+
+void hashmap_destroy(struct hashmap *map);
+
+void hashmap_put(struct hashmap *map, uint32_t key, uint32_t value);
+
+bool hashmap_get(const struct hashmap *map, uint32_t key, uint32_t *value);
+
+bool hashmap_remove(struct hashmap *map, uint32_t key);
+
+void hashmap_clear(struct hashmap *map);
+
+size_t hashmap_size(const struct hashmap *map);
+
+size_t hashmap_capacity(const struct hashmap *map);
 
 #endif

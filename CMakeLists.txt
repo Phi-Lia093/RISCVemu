@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 2026 PhiLia093 phi_lia093@126.com
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 cmake_minimum_required(VERSION 3.10)
 project(RISCVemu C)
 
@@ -9,7 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_SKIP_RPATH TRUE)
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic -O0 -g")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic -O3 -g")
 
 file(GLOB_RECURSE SOURCES
     "src/*.c"

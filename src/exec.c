@@ -1,3 +1,23 @@
+/*
+ * SPDX-FileCopyrightText: 2026 PhiLia093 phi_lia093@126.com
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This file is part of RISCVemu.
+ * RISCVemu is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU General Public License as published by the Free Software
+ * Foundation, either version 3 of the License, or (at your option) any later
+ * version.
+ *
+ * RISCVemu is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include <stdint.h>
 
 #include <config.h>
@@ -437,7 +457,9 @@ exec(uint32_t ins)
     case 0b1110011:
     {
         uint32_t imm = (ins >> 20) & 0xFFF;
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
         uint32_t csr = (ins >> 20) & 0xFFF;
+#endif
         uint32_t rs1 = (ins >> 15) & 0x1F;
         uint32_t rd = (ins >> 7) & 0x1F;
 
@@ -455,6 +477,7 @@ exec(uint32_t ins)
                 case 0x001: // ebreak
                     insi_i_ebreak();
                     break;
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
                 case 0x102: // sret
                     ins_sret();
                     break;
@@ -473,10 +496,12 @@ exec(uint32_t ins)
                 case 0x009: // sfence.vma
                     ins_sfence_vma();
                     break;
+#endif
                 default:
                     fatal("illegal system instruction imm=0x%x", imm);
                 }
             }
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
             else if (imm == 0x009)
             {
                 if (rd != 0)
@@ -485,11 +510,13 @@ exec(uint32_t ins)
                 }
                 ins_sfence_vma();
             }
+#endif
             else
             {
                 fatal("illegal system instruction imm=0x%x rs1=%d rd=%d", imm,
                       rs1, rd);
             }
+
             break;
         }
 

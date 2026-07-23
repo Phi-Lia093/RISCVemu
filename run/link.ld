@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 PhiLia093 phi_lia093@126.com */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 OUTPUT_ARCH(riscv)
 ENTRY(_start)
 

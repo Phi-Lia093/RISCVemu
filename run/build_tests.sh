@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 PhiLia093 phi_lia093@126.com
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 BUILD_DIR="$1"
 SOURCE_DIR="$2"
