@@ -198,4 +198,42 @@ insa_r_amomin_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
     reg_write(rd, old_value);
 }
 
+static inline void
+insa_r_amomaxu_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
+{
+    uint32_t addr = reg_read(rs1);
+    uint32_t value = reg_read(rs2);
+
+    if (unlikely(addr & 0x3))
+    {
+        fatal("AMOMAXU.W misaligned address: 0x%x", addr);
+        reg_write(rd, 0);
+        return;
+    }
+
+    uint32_t old_value = mem_read32_unsigned(addr);
+    uint32_t new_value = (old_value > value) ? old_value : value;
+    mem_write32(addr, new_value);
+    reg_write(rd, old_value);
+}
+
+static inline void
+insa_r_amominu_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
+{
+    uint32_t addr = reg_read(rs1);
+    uint32_t value = reg_read(rs2);
+
+    if (unlikely(addr & 0x3))
+    {
+        fatal("AMOMINU.W misaligned address: 0x%x", addr);
+        reg_write(rd, 0);
+        return;
+    }
+
+    uint32_t old_value = mem_read32_unsigned(addr);
+    uint32_t new_value = (old_value < value) ? old_value : value;
+    mem_write32(addr, new_value);
+    reg_write(rd, old_value);
+}
+
 #endif

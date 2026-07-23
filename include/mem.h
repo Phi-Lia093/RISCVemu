@@ -7,7 +7,7 @@
 #include <config.h>
 #include <emu.h>
 
-#define MEM_SIZE (4 * 1024 * 1024 * 1024L - 4096L)
+#define MEM_SIZE (3 * 1024 * 1024 * 1024L)
 
 #ifdef CONFIG_ENABLE_UART_DEVICE
 #include <device/uart.h>

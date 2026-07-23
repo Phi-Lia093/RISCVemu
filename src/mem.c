@@ -10,4 +10,8 @@ init_mem(void)
 {
     g_state.main_memory = (uint8_t *)calloc(MEM_SIZE, sizeof(uint8_t));
     g_state.mmu_flags = (uint32_t *)calloc(MEM_SIZE, sizeof(uint32_t));
+    if (!g_state.main_memory || !g_state.mmu_flags)
+    {
+        fatal("Failed to allocate memory");
+    }
 }

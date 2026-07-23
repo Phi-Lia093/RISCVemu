@@ -300,13 +300,11 @@ exec(uint32_t ins)
             }
             case 0x02:
             {
-                info("LR.W: rs1=0x%08x, rd=0x%08x\n", rs1, rd);
                 insa_r_lr_w(rs1, rd);
                 break;
             }
             case 0x03:
             {
-                info("SC.W: rs1=0x%08x, rs2=0x%08x, rd=0x%08x\n", rs1, rs2, rd);
                 insa_r_sc_w(rs1, rs2, rd);
                 break;
             }
@@ -333,6 +331,16 @@ exec(uint32_t ins)
             case 0x14:
             {
                 insa_r_amomax_w(rs1, rs2, rd);
+                break;
+            }
+            case 0x18:
+            {
+                insa_r_amominu_w(rs1, rs2, rd);
+                break;
+            }
+            case 0x1C:
+            {
+                insa_r_amomaxu_w(rs1, rs2, rd);
                 break;
             }
             default:

@@ -35,6 +35,11 @@ get_rd(uint32_t ins)
 {
     return (ins >> 7) & 0x1F;
 }
+static inline uint32_t
+get_funct5(uint32_t ins)
+{
+    return (ins >> 27) & 0x1F;
+}
 
 static inline uint32_t
 sign_extend_12(uint32_t imm)
@@ -77,6 +82,7 @@ disasm(uint32_t ins)
     uint32_t rs1 = get_rs1(ins);
     uint32_t rs2 = get_rs2(ins);
     uint32_t rd = get_rd(ins);
+    uint32_t funct5 = get_funct5(ins);
 
     // COMPACT extension not supported in disasm
     if ((opcode & 3) != 3)
@@ -398,20 +404,78 @@ disasm(uint32_t ins)
         break;
     }
 
+    // ATOMIC (A extension)
+    case 0b0101111:
+    {
+        if (funct3 == 0x2)
+        {
+            const char *mnemonic = "?";
+            switch (funct5)
+            {
+            case 0x00:
+                mnemonic = "amoadd.w";
+                break;
+            case 0x01:
+                mnemonic = "amoswap.w";
+                break;
+            case 0x02:
+                mnemonic = "lr.w";
+                break;
+            case 0x03:
+                mnemonic = "sc.w";
+                break;
+            case 0x04:
+                mnemonic = "amoxor.w";
+                break;
+            case 0x08:
+                mnemonic = "amoor.w";
+                break;
+            case 0x0C:
+                mnemonic = "amoand.w";
+                break;
+            case 0x10:
+                mnemonic = "amomin.w";
+                break;
+            case 0x14:
+                mnemonic = "amomax.w";
+                break;
+            default:
+                goto unknown;
+            }
+
+            if (funct5 == 0x02) // lr.w: rd, rs1
+            {
+                sprintf(disasm_buf, "%s %s, (%s)", mnemonic, reg_name(rd),
+                        reg_name(rs1));
+            }
+            else if (funct5 == 0x03) // sc.w: rd, rs2, (rs1)
+            {
+                sprintf(disasm_buf, "%s %s, %s, (%s)", mnemonic, reg_name(rd),
+                        reg_name(rs2), reg_name(rs1));
+            }
+            else // am*: rd, rs2, (rs1)
+            {
+                sprintf(disasm_buf, "%s %s, %s, (%s)", mnemonic, reg_name(rd),
+                        reg_name(rs2), reg_name(rs1));
+            }
+        }
+        else
+        {
+            goto unknown;
+        }
+        break;
+    }
+
     // SYSTEM
     case 0b1110011:
     {
-        uint32_t imm
-            = (ins >> 20) & 0xFFF; // 不需要 sign_extend，用于 SYSTEM 指令
+        uint32_t imm = (ins >> 20) & 0xFFF;
         uint32_t csr = (ins >> 20) & 0xFFF;
-        uint32_t rs1 = (ins >> 15) & 0x1F;
-        uint32_t rd = (ins >> 7) & 0x1F;
 
         switch (funct3)
         {
-        case 0: // 特权指令
+        case 0:
         {
-            // 先检查 rs1=0 且 rd=0 的情况
             if (rs1 == 0 && rd == 0)
             {
                 switch (imm)
@@ -422,13 +486,13 @@ disasm(uint32_t ins)
                 case 0x001:
                     sprintf(disasm_buf, "ebreak");
                     break;
-                case 0x100:
+                case 0x102:
                     sprintf(disasm_buf, "sret");
                     break;
-                case 0x300:
+                case 0x302:
                     sprintf(disasm_buf, "mret");
                     break;
-                case 0x700:
+                case 0x702:
                     sprintf(disasm_buf, "mnret");
                     break;
                 case 0x104:
@@ -437,14 +501,15 @@ disasm(uint32_t ins)
                 case 0x105:
                     sprintf(disasm_buf, "wfi");
                     break;
+                case 0x009:
+                    sprintf(disasm_buf, "sfence.vma");
+                    break;
                 default:
                     goto unknown;
                 }
             }
-            else if (imm == 0)
+            else if (imm == 0x009)
             {
-                // sfence.vma: imm=0, rs1/rd 可以是非零
-                // 根据 rs1 和 rd 是否为零显示不同格式
                 if (rs1 == 0 && rd == 0)
                 {
                     sprintf(disasm_buf, "sfence.vma");
@@ -482,7 +547,7 @@ disasm(uint32_t ins)
             sprintf(disasm_buf, "csrrc %s, %s, 0x%03x", reg_name(rd),
                     reg_name(rs1), csr);
             break;
-        case 0b101: // CSRRWI (rs1 是立即数)
+        case 0b101: // CSRRWI
             sprintf(disasm_buf, "csrrwi %s, %d, 0x%03x", reg_name(rd), rs1,
                     csr);
             break;
