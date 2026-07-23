@@ -23,6 +23,23 @@
 
 #include <stdint.h>
 
+#define RW 1
+#define RO 0
+
+struct csr_operation
+{
+    uint32_t valid;
+    uint32_t privilege;
+    uint32_t rw;
+    uint32_t value;
+    uint32_t (*read_callback)(void);
+    void (*write_callback)(uint32_t val);
+};
+
+extern struct csr_operation csr_table[256];
+
+void init_csr_table(void);
+
 void ins_sret(void);
 void ins_mret(void);
 void ins_mnret(void);

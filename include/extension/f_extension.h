@@ -18,41 +18,7 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef EMU_H
-#define EMU_H
-
-#include <config.h>
-#include <hashmap_u32.h>
-#include <stdint.h>
-
-#define likely(x) __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
-
-// mmu flags
-// bit 0: reserve (in "A" extension)
-
-#define PRV_USER 0
-#define PRV_SUPERVISOR 1
-#define PRV_HYPERVISOR 2
-#define PRV_MACHINE 3
-
-struct machine_state
-{
-    uint32_t gpr[32];
-    uint32_t pc;
-    uint8_t *main_memory;
-    int terminated;
-#ifdef CONFIG_ENABLE_A_EXTENSION
-    struct hashmap mmu_flags;
-#endif
-#ifdef CONFIG_ENABLE_DEBUGGER
-    int single_step;
-    uint32_t breakpoint;
-    uint32_t breakpoint_enabled;
-#endif
-    uint32_t privilege;
-};
-
-extern struct machine_state g_state;
+#ifndef F_EXTENSION_H
+#define F_EXTENSION_H
 
 #endif

@@ -35,6 +35,10 @@
 
 #include <config.h>
 
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+#include <extension/zicsr_extension.h>
+#endif
+
 struct machine_state g_state = { 0 }; // this will not fuck up addrs
 
 static void
@@ -180,6 +184,12 @@ main(int argc, char **argv)
     // mem addr
     g_state.pc = program_base;
     g_state.terminated = 0;
+    g_state.privilege = PRV_MACHINE;
+
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    init_csr_table();
+#endif
+
 #ifdef CONFIG_ENABLE_DEBUGGER
     g_state.single_step = debug_mode;
 
