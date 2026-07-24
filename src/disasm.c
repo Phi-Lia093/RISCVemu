@@ -156,6 +156,17 @@ disasm(uint32_t ins)
                     reg_name(rs1), reg_name(rs2));
             break;
         }
+        else if (unlikely(funct7 == 0b0000111))
+        {
+            if (unlikely(funct3 == 0b101))
+                sprintf(disasm_buf, "czero_eqz %s, %s", reg_name(rd),
+                        reg_name(rs1));
+            else if (unlikely(funct3 == 0b111))
+                sprintf(disasm_buf, "czero_nez %s, %s", reg_name(rd),
+                        reg_name(rs1));
+            else
+                goto unknown;
+        }
         else
         {
             switch (funct3)

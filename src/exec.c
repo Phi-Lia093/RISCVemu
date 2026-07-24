@@ -48,6 +48,10 @@
 #include <extension/zicsr_extension.h>
 #endif
 
+#ifdef CONFIG_ENABLE_ZICOND_EXTENSION
+#include <extension/zicond_extension.h>
+#endif
+
 #ifdef CONFIG_ENABLE_M_EXTENSION
 static void (*m_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
     [0] = {
@@ -109,20 +113,23 @@ exec(uint32_t ins)
     // R format
     case 0b0110011:
     {
+        if (unlikely(funct7 == 0b0000001))
+        {
 #ifdef CONFIG_ENABLE_M_EXTENSION
-        // ALL M extension instructions
-        if (unlikely(funct7 == 0b0000001))
-        {
             m_ins_optable[funct3][funct7](rs2, rs1, rd);
-        }
-#endif
-#ifndef CONFIG_ENABLE_M_EXTENSION
-        // ALL M extension instructions
-        if (unlikely(funct7 == 0b0000001))
-        {
+#else
             fatal("unsupported M extension instruction");
-        }
 #endif
+        }
+        else if (unlikely(funct7 == 0b0000111))
+        {
+            if (unlikely(funct3 == 0b101))
+                ins_zicond_czero_eqz(rs1, rs2, rd);
+            else if (unlikely(funct3 == 0b111))
+                ins_zicond_czero_nez(rs1, rs2, rd);
+            else
+                fatal("invalid ZICOND funct3");
+        }
         else
         {
             switch (funct3)

@@ -18,35 +18,37 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-void
-_start(void) __attribute__((section(".text._start")));
+#ifndef ZICOND_EXTENSION_H
+#define ZICOND_EXTENSION_H
 
-int
-_main();
+#include <config.h>
+#ifdef CONFIG_ENABLE_ZICOND_EXTENSION
 
-void debug_print(char *str)
+#include <exec.h>
+#include <stdint.h>
+
+static inline void
+ins_zicond_czero_eqz(uint32_t rs1, uint32_t rs2, uint32_t rd)
 {
-    while (*str) {
-        *(volatile unsigned int *)0x10000000 = *str++;
-    }
+    uint32_t val1 = reg_read(rs1);
+    uint32_t val2 = reg_read(rs2);
+    if (val2 == 0)
+        reg_write(rd, 0);
+    else
+        reg_write(rd, val1);
 }
 
-void
-_start(void)
+static inline void
+ins_zicond_czero_nez(uint32_t rs1, uint32_t rs2, uint32_t rd)
 {
-    __asm__ volatile("la sp, _stack_top\n");
-    _main();
-    __asm__ volatile("ecall\n");
-    while (1);
+    uint32_t val1 = reg_read(rs1);
+    uint32_t val2 = reg_read(rs2);
+    if (val2 != 0)
+        reg_write(rd, 0);
+    else
+        reg_write(rd, val1);
 }
 
-int
-_main()
-{
-    debug_print("Hello, World!\n");
-    // for(unsigned int i=0; i<0x10000000; i+=2)
-    // {
-    //     i--;
-    // }
-    return 0x325;
-}
+#endif
+
+#endif
