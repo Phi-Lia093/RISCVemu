@@ -21,109 +21,105 @@
 #include <config.h>
 #include <emu.h>
 #include <exec.h>
+#include <extension/system.h>
 #include <extension/zicsr_extension.h>
 #include <logger.h>
 
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
 
-struct csr_operation csr_table[256] = { 0 };
+struct csr_operation csr_table[4096] = { 0 };
 
 void
 init_csr_table(void)
 {
-    csr_table[1] = (struct csr_operation){ .valid = 1,
-                                           .privilege = PRV_USER,
-                                           .rw = RW,
-                                           .value = 0,
-                                           .read_callback = NULL,
-                                           .write_callback = NULL };
-}
-
-void
-ins_sret(void)
-{
-}
-
-void
-ins_mret(void)
-{
-}
-
-void
-ins_mnret(void)
-{
-}
-
-void
-ins_wfi(void)
-{
-}
-
-void
-ins_sctrclr(void)
-{
-}
-
-void
-ins_sfence_vma(void)
-{
-}
-
-void
-check_csr_access(uint32_t csr)
-{
-    uint32_t index = csr & 0xFF;
-
-    if (!csr_table[index].valid)
+    for (int i = 0; i < 4096; i++)
     {
-        fatal("Invalid CSR access");
+        csr_table[i].valid = 0;
+        csr_table[i].privilege = PRV_MACHINE;
+        csr_table[i].rw = RW;
+        csr_table[i].value = 0;
+        csr_table[i].read_callback = NULL;
+        csr_table[i].write_callback = NULL;
     }
 
-    if (g_state.privilege > csr_table[index].privilege)
-    {
-        fatal("Insufficient privilege for CSR access");
-    }
-}
+    // Machine Information Registers
+    csr_table[CSR_MVENDORID]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, NULL, NULL };
+    csr_table[CSR_MARCHID]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, NULL, NULL };
+    csr_table[CSR_MIMPID]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, NULL, NULL };
+    csr_table[CSR_MHARTID]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, NULL, NULL };
 
-uint32_t
-csr_read(uint32_t csr)
-{
-    uint32_t index = csr & 0xFF;
-    check_csr_access(csr);
-    if (csr_table[index].read_callback != NULL)
-    {
-        return csr_table[index].read_callback();
-    }
-    else
-    {
-        return csr_table[index].value;
-    }
-}
+    // Machine Trap Setup
+    csr_table[CSR_MSTATUS]
+        = (struct csr_operation){ 1, PRV_MACHINE,  RW,
+                                  0, mstatus_read, mstatus_write };
+    csr_table[CSR_MISA]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0x40001100, NULL, NULL };
+    csr_table[CSR_MEDELEG]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MIDELEG]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MIE]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MTVEC]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MCOUNTEREN]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0xFFFFFFFF, NULL, NULL };
 
-void
-csr_write(uint32_t csr, uint32_t val)
-{
-    uint32_t index = csr & 0xFF;
-    check_csr_access(csr);
+    // Machine Trap Handling
+    csr_table[CSR_MSCRATCH]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MEPC]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MCAUSE]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MTVAL]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MIP]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MNSTATUS]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
 
-    if (csr_table[index].rw == RO)
+    // Physical Memory Protection
+    csr_table[CSR_PMPCFG0]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_PMPADDR0]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    for (int i = 1; i < 16; i++)
     {
-        fatal("Write to read-only CSR");
+        csr_table[CSR_PMPADDR0 + i]
+            = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
     }
 
-    if (csr_table[index].write_callback != NULL)
-    {
-        csr_table[index].write_callback(val);
-    }
-    else
-    {
-        csr_table[index].value = val;
-    }
+    // Supervisor Trap Setup
+    csr_table[CSR_SSTATUS]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW,
+                                  0, sstatus_read,   sstatus_write };
+    csr_table[CSR_SIE]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+    csr_table[CSR_STVEC]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+    csr_table[CSR_SSCRATCH]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+    csr_table[CSR_SEPC]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+    csr_table[CSR_SCAUSE]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+    csr_table[CSR_STVAL]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+    csr_table[CSR_SIP]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+    csr_table[CSR_SATP]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
 }
 
 void
 ins_zicsr_csrrw(uint32_t rs1, uint32_t rd, uint32_t csr)
 {
+    check_csr_access(csr);
     uint32_t old_val = csr_read(csr);
     uint32_t new_val = reg_read(rs1);
     csr_write(csr, new_val);
@@ -136,6 +132,7 @@ ins_zicsr_csrrw(uint32_t rs1, uint32_t rd, uint32_t csr)
 void
 ins_zicsr_csrrs(uint32_t rs1, uint32_t rd, uint32_t csr)
 {
+    check_csr_access(csr);
     uint32_t old_val = csr_read(csr);
     if (rs1 != 0)
     {
@@ -152,6 +149,7 @@ ins_zicsr_csrrs(uint32_t rs1, uint32_t rd, uint32_t csr)
 void
 ins_zicsr_csrrc(uint32_t rs1, uint32_t rd, uint32_t csr)
 {
+    check_csr_access(csr);
     uint32_t old_val = csr_read(csr);
     if (rs1 != 0)
     {
@@ -168,6 +166,7 @@ ins_zicsr_csrrc(uint32_t rs1, uint32_t rd, uint32_t csr)
 void
 ins_zicsr_csrrwi(uint32_t uimm, uint32_t rd, uint32_t csr)
 {
+    check_csr_access(csr);
     uint32_t old_val = csr_read(csr);
     uint32_t new_val = uimm & 0x1F;
     csr_write(csr, new_val);
@@ -180,6 +179,7 @@ ins_zicsr_csrrwi(uint32_t uimm, uint32_t rd, uint32_t csr)
 void
 ins_zicsr_csrrsi(uint32_t uimm, uint32_t rd, uint32_t csr)
 {
+    check_csr_access(csr);
     uint32_t old_val = csr_read(csr);
     if (uimm != 0)
     {
@@ -195,6 +195,7 @@ ins_zicsr_csrrsi(uint32_t uimm, uint32_t rd, uint32_t csr)
 void
 ins_zicsr_csrrci(uint32_t uimm, uint32_t rd, uint32_t csr)
 {
+    check_csr_access(csr);
     uint32_t old_val = csr_read(csr);
     if (uimm != 0)
     {

@@ -63,11 +63,12 @@ for bin_file in "$TEST_DIR"/*.bin; do
     filename=$(basename "$bin_file" .bin)
 
     # our emulator do not support exception and interrupt so despite our behavior on ALIGN is right, this test cannot be passed
-    if [ "$filename" = "rv32ui-p-ma_data" ]; then
-        echo -e "[$filename] ${YELLOW}⏭️ SKIPPED${NC}"
-        ((SKIPPED++))
-        continue
-    fi
+    # now we support misaligned load/store, this test can be passed
+    # if [ "$filename" = "rv32ui-p-ma_data" ]; then
+    #     echo -e "[$filename] ${YELLOW}⏭️ SKIPPED${NC}"
+    #     ((SKIPPED++))
+    #     continue
+    # fi
 
     test_log_file="$FULL_LOG_DIR/${filename}.log"
 

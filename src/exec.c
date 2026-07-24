@@ -44,6 +44,7 @@
 #endif
 
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+#include <extension/system.h>
 #include <extension/zicsr_extension.h>
 #endif
 

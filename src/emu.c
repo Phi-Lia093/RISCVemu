@@ -36,6 +36,7 @@
 #include <config.h>
 
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+#include <extension/system.h>
 #include <extension/zicsr_extension.h>
 #endif
 
@@ -213,6 +214,7 @@ main(int argc, char **argv)
 #ifdef CONFIG_ENABLE_DEBUGGER
     while (!g_state.terminated)
     {
+        check_and_handle_interrupts();
         if (g_state.pc >= MEM_SIZE)
         {
             fatal("PC out of bounds: 0x%x", g_state.pc);

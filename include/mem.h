@@ -27,7 +27,7 @@
 #include <config.h>
 #include <emu.h>
 
-#define MEM_SIZE (3 * 1024 * 1024 * 1024L)
+#define MEM_SIZE (4 * 1024 * 1024 * 1024L - 4096L)
 
 #ifdef CONFIG_ENABLE_UART_DEVICE
 #include <device/uart.h>
@@ -106,5 +106,57 @@ is_aligned(uint32_t addr, uint32_t size)
 {
     return (addr & (size - 1)) == 0;
 }
+
+#ifdef CONFIG_SUPPORT_MISALIGN
+
+static inline uint32_t
+misaligned_load32(uint32_t addr)
+{
+    uint32_t val = 0;
+    for (int i = 0; i < 4; i++)
+    {
+        val |= (uint32_t)mem_read8_unsigned(addr + i) << (i * 8);
+    }
+    return val;
+}
+
+static inline int32_t
+misaligned_load32_signed(uint32_t addr)
+{
+    return (int32_t)misaligned_load32(addr);
+}
+
+static inline uint16_t
+misaligned_load16(uint32_t addr)
+{
+    uint16_t val = 0;
+    val |= (uint16_t)mem_read8_unsigned(addr);
+    val |= (uint16_t)mem_read8_unsigned(addr + 1) << 8;
+    return val;
+}
+
+static inline int16_t
+misaligned_load16_signed(uint32_t addr)
+{
+    return (int16_t)misaligned_load16(addr);
+}
+
+static inline void
+misaligned_store32(uint32_t addr, uint32_t val)
+{
+    for (int i = 0; i < 4; i++)
+    {
+        mem_write8(addr + i, (val >> (i * 8)) & 0xFF);
+    }
+}
+
+static inline void
+misaligned_store16(uint32_t addr, uint16_t val)
+{
+    mem_write8(addr, val & 0xFF);
+    mem_write8(addr + 1, (val >> 8) & 0xFF);
+}
+
+#endif
 
 #endif
