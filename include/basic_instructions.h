@@ -26,6 +26,7 @@
 #include <mem.h>
 #include <stdint.h>
 
+#include <config.h>
 #include <exec.h>
 #include <extension/system.h>
 
@@ -427,7 +428,9 @@ static inline void
 insi_i_ebreak(void)
 {
     info("Stopped at EBREAK");
+#ifdef CONFIG_ENABLE_DEBUGGER
     g_state.single_step = 1;
+#endif
 }
 
 static inline void

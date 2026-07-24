@@ -18,32 +18,30 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef ZICNTR_EXTENSION_H
+#define ZICNTR_EXTENSION_H
 
-/* Auto-generated from CMake options - DO NOT EDIT MANUALLY */
+#include <config.h>
 
-/* General Setup */
-#cmakedefine CONFIG_ENABLE_DEBUGGER
-#cmakedefine CONFIG_SUPPORT_MISALIGN
+#ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
 
-/* ISA Extensions */
-#cmakedefine CONFIG_ENABLE_M_EXTENSION
-#cmakedefine CONFIG_ENABLE_A_EXTENSION
-#cmakedefine CONFIG_ENABLE_C_EXTENSION
-#cmakedefine CONFIG_ENABLE_F_EXTENSION
-#cmakedefine CONFIG_ENABLE_D_EXTENSION
+#include <stdint.h>
 
-/* Privilege Extensions */
-#cmakedefine CONFIG_ENABLE_ZICSR_EXTENSION
-#cmakedefine CONFIG_ENABLE_ZIFENCEI_EXTENSION
-#cmakedefine CONFIG_ENABLE_ZICNTR_EXTENSION
+extern uint64_t cycle;
 
+#define CSR_CYCLE_LO 0xC00
+#define CSR_TIME_LO 0xC01
+#define CSR_INSTRET_LO 0xC02
 
-/* Device Support */
-#cmakedefine CONFIG_ENABLE_UART_DEVICE
+#define CSR_CYCLE_HI 0xC80
+#define CSR_TIME_HI 0xC81
+#define CSR_INSTRET_HI 0xC82
 
-/* Performance (from host detection, not user-configurable) */
-#cmakedefine USE_HOST_M_ACCEL
+uint32_t get_zicntr_cycle_l();
+uint32_t get_zicntr_cycle_h();
+uint32_t get_zicntr_time_l();
+uint32_t get_zicntr_time_h();
 
-#endif /* CONFIG_H */
+#endif // CONFIG_ENABLE_ZICNTR_EXTENSION
+
+#endif /* ZICNTR_EXTENSION_H */

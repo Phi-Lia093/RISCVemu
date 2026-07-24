@@ -23,6 +23,7 @@ option(CONFIG_ENABLE_F_EXTENSION "F Extension: Single-Precision FPU (requires Zi
 option(CONFIG_ENABLE_D_EXTENSION "D Extension: Double-Precision FPU (requires F)" ON)
 
 option(CONFIG_ENABLE_ZICSR_EXTENSION "Zicsr: CSR Instructions (required for F/D)" ON)
+option(CONFIG_ENABLE_ZICNTR_EXTENSION "Zicntr: Counter Instructions" ON)
 option(CONFIG_ENABLE_ZIFENCEI_EXTENSION "Zifencei: FENCE.I instruction" ON)
 
 option(CONFIG_ENABLE_UART_DEVICE "UART Device (16550-compatible at 0x10000000)" ON)
@@ -143,6 +144,7 @@ message(STATUS "  C Extension:     ${CONFIG_ENABLE_C_EXTENSION}")
 message(STATUS "  F Extension:     ${CONFIG_ENABLE_F_EXTENSION}")
 message(STATUS "  D Extension:     ${CONFIG_ENABLE_D_EXTENSION}")
 message(STATUS "  Zicsr:           ${CONFIG_ENABLE_ZICSR_EXTENSION}")
+message(STATUS "  Zicntr:          ${CONFIG_ENABLE_ZICNTR_EXTENSION}")
 message(STATUS "  Zifencei:        ${CONFIG_ENABLE_ZIFENCEI_EXTENSION}")
 message(STATUS "  UART:            ${CONFIG_ENABLE_UART_DEVICE}")
 message(STATUS "  Optimize Size:   ${OPTIMIZE_FOR_SIZE}")

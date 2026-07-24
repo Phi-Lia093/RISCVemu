@@ -25,6 +25,10 @@
 #include <extension/zicsr_extension.h>
 #include <logger.h>
 
+#ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
+#include <extension/zicntr_extension.h>
+#endif
+
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
 
 struct csr_operation csr_table[4096] = { 0 };
@@ -41,6 +45,28 @@ init_csr_table(void)
         csr_table[i].read_callback = NULL;
         csr_table[i].write_callback = NULL;
     }
+
+// Zicntr Extension
+#ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
+    csr_table[CSR_CYCLE_LO] = (struct csr_operation){
+        1, PRV_USER, RO, 0, get_zicntr_cycle_l, NULL
+    };
+    csr_table[CSR_TIME_LO]
+        = (struct csr_operation){ 1, PRV_USER, RO, 0, get_zicntr_time_l, NULL };
+    csr_table[CSR_INSTRET_LO] = (struct csr_operation){
+        1, PRV_USER, RO, 0, get_zicntr_cycle_l, NULL
+    };
+
+    csr_table[CSR_CYCLE_HI] = (struct csr_operation){
+        1, PRV_USER, RO, 0, get_zicntr_cycle_h, NULL
+    };
+    csr_table[CSR_TIME_HI]
+        = (struct csr_operation){ 1, PRV_USER, RO, 0, get_zicntr_time_h, NULL };
+    csr_table[CSR_INSTRET_HI] = (struct csr_operation){
+        1, PRV_USER, RO, 0, get_zicntr_cycle_h, NULL
+    };
+
+#endif
 
     // Machine Information Registers
     csr_table[CSR_MVENDORID]

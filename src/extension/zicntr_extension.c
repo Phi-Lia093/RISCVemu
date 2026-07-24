@@ -18,32 +18,44 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef CONFIG_H
-#define CONFIG_H
+#include <config.h>
+#ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
 
-/* Auto-generated from CMake options - DO NOT EDIT MANUALLY */
+#include <stdint.h>
+#include <time.h>
 
-/* General Setup */
-#cmakedefine CONFIG_ENABLE_DEBUGGER
-#cmakedefine CONFIG_SUPPORT_MISALIGN
+uint64_t cycle = 0;
 
-/* ISA Extensions */
-#cmakedefine CONFIG_ENABLE_M_EXTENSION
-#cmakedefine CONFIG_ENABLE_A_EXTENSION
-#cmakedefine CONFIG_ENABLE_C_EXTENSION
-#cmakedefine CONFIG_ENABLE_F_EXTENSION
-#cmakedefine CONFIG_ENABLE_D_EXTENSION
+static inline uint64_t
+get_time()
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000 + (uint64_t)ts.tv_nsec;
+}
 
-/* Privilege Extensions */
-#cmakedefine CONFIG_ENABLE_ZICSR_EXTENSION
-#cmakedefine CONFIG_ENABLE_ZIFENCEI_EXTENSION
-#cmakedefine CONFIG_ENABLE_ZICNTR_EXTENSION
+uint32_t
+get_zicntr_cycle_l()
+{
+    return (uint32_t)cycle;
+}
 
+uint32_t
+get_zicntr_cycle_h()
+{
+    return (uint32_t)(cycle >> 32);
+}
 
-/* Device Support */
-#cmakedefine CONFIG_ENABLE_UART_DEVICE
+uint32_t
+get_zicntr_time_l()
+{
+    return (uint32_t)get_time();
+}
 
-/* Performance (from host detection, not user-configurable) */
-#cmakedefine USE_HOST_M_ACCEL
+uint32_t
+get_zicntr_time_h()
+{
+    return (uint32_t)(get_time() >> 32);
+}
 
-#endif /* CONFIG_H */
+#endif // CONFIG_ENABLE_ZICNTR_EXTENSION

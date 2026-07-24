@@ -40,6 +40,10 @@
 #include <extension/zicsr_extension.h>
 #endif
 
+#ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
+#include <extension/zicntr_extension.h>
+#endif
+
 struct machine_state g_state = { 0 }; // this will not fuck up addrs
 
 static void
@@ -204,9 +208,6 @@ main(int argc, char **argv)
         g_state.breakpoint = 0xDEADBEEF;
         g_state.breakpoint_enabled = 0;
     }
-#else
-    g_state.single_step = 0;
-    g_state.breakpoint_enabled = 0;
 #endif
 
     info("starting execution at PC=0x%x", g_state.pc);
@@ -240,6 +241,9 @@ main(int argc, char **argv)
         uint32_t ins = mem_read32_unsigned(g_state.pc);
         exec(ins);
         g_state.pc += 4;
+#ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
+        cycle++;
+#endif
     }
 #else
     while (!g_state.terminated)
@@ -253,6 +257,9 @@ main(int argc, char **argv)
         uint32_t ins = mem_read32_unsigned(g_state.pc);
         exec(ins);
         g_state.pc += 4;
+#ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
+        cycle++;
+#endif
     }
 #endif
 
