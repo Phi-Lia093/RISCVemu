@@ -28,6 +28,10 @@
 #include <emu.h>
 #include <mem.h>
 
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_DEBUGGER
+
 static char last_cmd[256] = { 0 };
 
 static int show_disasm = 1; // 1 = show disassembly, 0 = show raw hex
@@ -541,3 +545,5 @@ tick_debugger(void)
         }
     }
 }
+
+#endif // CONFIG_ENABLE_DEBUGGER

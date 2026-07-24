@@ -21,8 +21,14 @@
 #ifndef DEBUGGER_H
 #define DEBUGGER_H
 
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_DEBUGGER
+
 void init_debugger(void);
 
 void tick_debugger(void);
 
-#endif
+#endif // CONFIG_ENABLE_DEBUGGER
+
+#endif // DEBUGGER_H

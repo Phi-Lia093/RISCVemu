@@ -21,6 +21,10 @@
 #ifndef ZICSR_EXTENSION_H
 #define ZICSR_EXTENSION_H
 
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+
 #include <emu.h>
 #include <logger.h>
 #include <stdint.h>
@@ -143,4 +147,5 @@ void ins_zicsr_csrrwi(uint32_t uimm, uint32_t rd, uint32_t csr);
 void ins_zicsr_csrrsi(uint32_t uimm, uint32_t rd, uint32_t csr);
 void ins_zicsr_csrrci(uint32_t uimm, uint32_t rd, uint32_t csr);
 
-#endif
+#endif // CONFIG_ENABLE_ZICSR_EXTENSION
+#endif // ZICSR_EXTENSION_H

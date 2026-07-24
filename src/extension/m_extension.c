@@ -134,4 +134,4 @@ insm_r_remu(uint32_t rs2, uint32_t rs1, uint32_t rd)
         reg_write(rd, v1 % v2);
     }
 }
-#endif
+#endif // CONFIG_ENABLE_M_EXTENSION

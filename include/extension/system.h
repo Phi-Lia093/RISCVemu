@@ -21,6 +21,10 @@
 #ifndef SYSTEM_H
 #define SYSTEM_H
 
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+
 #include <stdint.h>
 
 #define MSTATUS_UIE (1 << 0)
@@ -89,4 +93,6 @@ void check_and_handle_interrupts(void);
 #define CAUSE_LOAD_PAGE_FAULT 13
 #define CAUSE_STORE_PAGE_FAULT 15
 
-#endif
+#endif // CONFIG_ENABLE_SYSTEM
+
+#endif // SYSTEM_H

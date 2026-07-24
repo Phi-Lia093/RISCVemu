@@ -21,8 +21,14 @@
 #ifndef DISASM_H
 #define DISASM_H
 
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_DEBUGGER
+
 #include <stdint.h>
 
 char *disasm(uint32_t ins);
 
-#endif
+#endif // CONFIG_ENABLE_DEBUGGER
+
+#endif // DISASM_H

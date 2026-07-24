@@ -27,4 +27,4 @@ ins_zifencei_zifencei()
 {
     // just do nothing
 }
-#endif
+#endif // CONFIG_ENABLE_ZIFENCEI_EXTENSION

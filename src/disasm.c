@@ -22,6 +22,10 @@
 #include <emu.h>
 #include <stdio.h>
 
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_DEBUGGER
+
 static char disasm_buf[1024];
 
 static inline uint32_t
@@ -615,3 +619,5 @@ disasm(uint32_t ins)
 
     return disasm_buf;
 }
+
+#endif // CONFIG_ENABLE_DEBUGGER

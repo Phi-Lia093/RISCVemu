@@ -21,17 +21,27 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define CONFIG_ENABLE_DEBUGGER
+/* Auto-generated from CMake options - DO NOT EDIT MANUALLY */
 
-#define CONFIG_SUPPORT_MISALIGN
+/* General Setup */
+#cmakedefine CONFIG_ENABLE_DEBUGGER
+#cmakedefine CONFIG_SUPPORT_MISALIGN
 
-#define CONFIG_ENABLE_M_EXTENSION
-#define CONFIG_ENABLE_A_EXTENSION
-// #define CONFIG_ENABLE_C_EXTENSION
+/* ISA Extensions */
+#cmakedefine CONFIG_ENABLE_M_EXTENSION
+#cmakedefine CONFIG_ENABLE_A_EXTENSION
+#cmakedefine CONFIG_ENABLE_C_EXTENSION
+#cmakedefine CONFIG_ENABLE_F_EXTENSION
+#cmakedefine CONFIG_ENABLE_D_EXTENSION
 
-#define CONFIG_ENABLE_ZICSR_EXTENSION
-#define CONFIG_ENABLE_ZIFENCEI_EXTENSION
+/* Privilege Extensions */
+#cmakedefine CONFIG_ENABLE_ZICSR_EXTENSION
+#cmakedefine CONFIG_ENABLE_ZIFENCEI_EXTENSION
 
-#define CONFIG_ENABLE_UART_DEVICE
+/* Device Support */
+#cmakedefine CONFIG_ENABLE_UART_DEVICE
 
-#endif
+/* Performance (from host detection, not user-configurable) */
+#cmakedefine USE_HOST_M_ACCEL
+
+#endif /* CONFIG_H */

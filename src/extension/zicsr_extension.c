@@ -208,4 +208,4 @@ ins_zicsr_csrrci(uint32_t uimm, uint32_t rd, uint32_t csr)
     }
 }
 
-#endif
+#endif // CONFIG_ENABLE_ZICSR_EXTENSION

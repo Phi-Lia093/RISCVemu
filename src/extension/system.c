@@ -23,6 +23,9 @@
 #include <extension/zicsr_extension.h>
 #include <logger.h>
 
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
 uint32_t
 mstatus_read(void)
 {
@@ -417,3 +420,5 @@ raise_supervisor_interrupt(uint32_t irq)
 {
     raise_supervisor_interrupt_internal(irq, g_state.pc);
 }
+
+#endif // CONFIG_ENABLE_ZICSR_EXTENSION

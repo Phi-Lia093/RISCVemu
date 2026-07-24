@@ -21,6 +21,12 @@
 #ifndef ZIFENCEI_EXTENSION_H
 #define ZIFENCEI_EXTENSION_H
 
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_ZIFENCEI_EXTENSION
+
 void ins_zifencei_zifencei(void);
 
-#endif
+#endif // CONFIG_ENABLE_ZIFENCEI_EXTENSION
+
+#endif // ZIFENCEI_EXTENSION_H

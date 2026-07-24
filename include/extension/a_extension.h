@@ -21,6 +21,10 @@
 #ifndef A_EXTENSION_H
 #define A_EXTENSION_H
 
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_A_EXTENSION
+
 #include <emu.h>
 #include <exec.h>
 #include <hashmap_u32.h>
@@ -290,4 +294,6 @@ insa_r_amominu_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
     reg_write(rd, old_value);
 }
 
-#endif
+#endif // CONFIG_ENABLE_A_EXTENSION
+
+#endif // A_EXTENSION_H

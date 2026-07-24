@@ -21,6 +21,10 @@
 #ifndef UART_H
 #define UART_H
 
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_UART_DEVICE
+
 #include <stdint.h>
 #include <stdio.h>
 #define UART_OUT 0x10000000
@@ -31,4 +35,6 @@ uart_putc(uint32_t c)
     putc(c & 0xff, stdout);
 }
 
-#endif
+#endif // CONFIG_ENABLE_UART_DEVICE
+
+#endif // UART_H

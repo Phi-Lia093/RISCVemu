@@ -21,4 +21,10 @@
 #ifndef C_EXTENSION_H
 #define C_EXTENSION_H
 
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_C_EXTENSION
+
+#endif // CONFIG_ENABLE_C_EXTENSION
+
 #endif // C_EXTENSION_H

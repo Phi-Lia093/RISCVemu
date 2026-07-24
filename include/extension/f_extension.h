@@ -21,4 +21,10 @@
 #ifndef F_EXTENSION_H
 #define F_EXTENSION_H
 
-#endif
+#include <config.h>
+
+#ifdef CONFIG_ENABLE_F_EXTENSION
+
+#endif // CONFIG_ENABLE_F_EXTENSION
+
+#endif // F_EXTENSION_H
