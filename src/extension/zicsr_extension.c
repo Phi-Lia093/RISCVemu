@@ -29,6 +29,10 @@
 #include <extension/zicntr_extension.h>
 #endif
 
+#ifdef CONFIG_ENABLE_F_EXTENSION
+#include <extension/f_extension.h>
+#endif
+
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
 
 struct csr_operation csr_table[4096] = { 0 };
@@ -46,6 +50,14 @@ init_csr_table(void)
         csr_table[i].write_callback = NULL;
     }
 
+#ifdef CONFIG_ENABLE_F_EXTENSION
+    csr_table[CSR_FCSR]
+        = (struct csr_operation){ 1, PRV_USER, RW, 0, get_fcsr, set_fcsr };
+    csr_table[CSR_FFLAGS]
+        = (struct csr_operation){ 1, PRV_USER, RW, 0, get_fflags, set_fflags };
+    csr_table[CSR_FRM]
+        = (struct csr_operation){ 1, PRV_USER, RW, 0, get_frm, set_frm };
+#endif
 // Zicntr Extension
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
     csr_table[CSR_CYCLE_LO] = (struct csr_operation){

@@ -33,6 +33,8 @@
 #cmakedefine CONFIG_ENABLE_C_EXTENSION
 #cmakedefine CONFIG_ENABLE_F_EXTENSION
 #cmakedefine CONFIG_ENABLE_D_EXTENSION
+#cmakedefine CONFIG_ENABLE_Q_EXTENSION
+
 
 /* Privilege Extensions */
 #cmakedefine CONFIG_ENABLE_ZICSR_EXTENSION

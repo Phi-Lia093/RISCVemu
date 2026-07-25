@@ -21,6 +21,7 @@ option(CONFIG_ENABLE_A_EXTENSION "A Extension: Atomic Operations (LR/SC/AMO)" ON
 option(CONFIG_ENABLE_C_EXTENSION "C Extension: 16-bit Compressed Instructions" OFF)
 option(CONFIG_ENABLE_F_EXTENSION "F Extension: Single-Precision FPU (requires Zicsr)" ON)
 option(CONFIG_ENABLE_D_EXTENSION "D Extension: Double-Precision FPU (requires F)" ON)
+option(CONFIG_ENABLE_Q_EXTENSION "Q Extension: Quad-Precision FPU (requires D)" ON)
 
 option(CONFIG_ENABLE_ZICSR_EXTENSION "Zicsr: CSR Instructions (required for F/D)" ON)
 option(CONFIG_ENABLE_ZICNTR_EXTENSION "Zicntr: Counter Instructions" ON)
@@ -72,6 +73,7 @@ file(GLOB_RECURSE SOURCES
 
 link_libraries(
     m
+    softfloat
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
@@ -144,6 +146,7 @@ message(STATUS "  A Extension:     ${CONFIG_ENABLE_A_EXTENSION}")
 message(STATUS "  C Extension:     ${CONFIG_ENABLE_C_EXTENSION}")
 message(STATUS "  F Extension:     ${CONFIG_ENABLE_F_EXTENSION}")
 message(STATUS "  D Extension:     ${CONFIG_ENABLE_D_EXTENSION}")
+message(STATUS "  Q Extension:     ${CONFIG_ENABLE_Q_EXTENSION}")
 message(STATUS "  Zicsr:           ${CONFIG_ENABLE_ZICSR_EXTENSION}")
 message(STATUS "  Zicntr:          ${CONFIG_ENABLE_ZICNTR_EXTENSION}")
 message(STATUS "  Zifencei:        ${CONFIG_ENABLE_ZIFENCEI_EXTENSION}")

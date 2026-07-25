@@ -121,6 +121,7 @@ exec(uint32_t ins)
             fatal("unsupported M extension instruction");
 #endif
         }
+#ifdef CONFIG_ENABLE_ZICOND_EXTENSION
         else if (unlikely(funct7 == 0b0000111))
         {
             if (unlikely(funct3 == 0b101))
@@ -130,6 +131,7 @@ exec(uint32_t ins)
             else
                 fatal("invalid ZICOND funct3");
         }
+#endif
         else
         {
             switch (funct3)
