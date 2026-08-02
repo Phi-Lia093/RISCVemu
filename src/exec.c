@@ -52,6 +52,10 @@
 #include <extension/zicond_extension.h>
 #endif
 
+#ifdef CONFIG_ENABLE_F_EXTENSION
+#include <extension/f_extension.h>
+#endif
+
 #ifdef CONFIG_ENABLE_M_EXTENSION
 static void (*m_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
     [0] = {
@@ -310,6 +314,45 @@ exec(uint32_t ins)
         }
         break;
     }
+#ifdef CONFIG_ENABLE_F_EXTENSION
+    // FP load (FLW / FLD / FLQ)
+    case 0b0000111:
+    {
+        uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
+        switch (funct3)
+        {
+        case 2: insf_flw(imm, rs1, rd); break;
+        case 3: insf_fld(imm, rs1, rd); break;
+        case 4: insf_flq(imm, rs1, rd); break;
+        default: fatal("invalid FP load instruction"); break;
+        }
+        break;
+    }
+    // FP store (FSW / FSD / FSQ)
+    case 0b0100111:
+    {
+        uint32_t imm = ((ins >> 25) & 0x7F) << 5;
+        imm |= ((ins >> 7) & 0x1F);
+        imm = sign_extend_12(imm);
+        switch (funct3)
+        {
+        case 2: insf_fsw(imm, rs1, rs2); break;
+        case 3: insf_fsd(imm, rs1, rs2); break;
+        case 4: insf_fsq(imm, rs1, rs2); break;
+        default: fatal("invalid FP store instruction"); break;
+        }
+        break;
+    }
+    // FMA: fmadd / fmsub / fnmsub / fnmadd
+    case 0b1000011: insf_r_fma(ins, 0); break; // fmadd
+    case 0b1000111: insf_r_fma(ins, 1); break; // fmsub
+    case 0b1001011: insf_r_fma(ins, 2); break; // fnmsub
+    case 0b1001111: insf_r_fma(ins, 3); break; // fnmadd
+    // FP-OP
+    case 0b1010011:
+        insf_r_fpop(ins);
+        break;
+#endif
 #ifdef CONFIG_ENABLE_A_EXTENSION
     case 0b0101111:
     {

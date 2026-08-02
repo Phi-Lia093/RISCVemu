@@ -23,7 +23,14 @@
 #ifdef CONFIG_ENABLE_F_EXTENSION
 #include <stdint.h>
 
-uint64_t fpr[sizeof(__float128) * 32 / sizeof(uint64_t)]; // max 32*QWORD
+#include <emu.h>
+#include <exec.h>
+#include <extension/f_extension.h>
+#include <logger.h>
+#include <mem.h>
+#include <softfloat.h>
+
+uint64_t fpr[sizeof(__float128) * 32 / sizeof(uint64_t)];
 
 uint32_t fcsr;
 
@@ -54,34 +61,1260 @@ set_fflags(uint32_t flags)
 void
 set_frm(uint32_t frm)
 {
-    if (frm >= 0b100) return;
+    if (frm > 4) return;
     fcsr = (fcsr & ~0b11100000) | (frm << 5);
 }
 
-void
-set_fcsr(uint32_t csr)
-{
+void set_fcsr(uint32_t csr) {
     uint32_t new_frm = (csr >> 5) & 0b111;
     uint32_t new_fflags = csr & 0b11111;
-
-    if (new_frm < 0b100)
-    {
+    if (new_frm <= 4) {
         fcsr = (new_fflags & 0b11111) | (new_frm << 5);
-    }
-    else
-    {
+    } else {
         fcsr = (new_fflags & 0b11111) | (fcsr & 0b11100000);
     }
 }
 
+/* ------------------------------------------------------------------ */
+/* SoftFloat glue: map RISC-V rounding modes / collect exception flags */
+/* ------------------------------------------------------------------ */
+
+static inline uint_fast8_t
+sf_rm(uint32_t rm)
+{
+    switch (get_rm(rm))
+    {
+    case RNE: return softfloat_round_near_even;
+    case RTZ: return softfloat_round_minMag;
+    case RDN: return softfloat_round_min;
+    case RUP: return softfloat_round_max;
+    case RMM: return softfloat_round_near_maxMag;
+    default:  return softfloat_round_near_even;
+    }
+}
+
+static inline void
+sf_begin(uint32_t rm)
+{
+    softfloat_roundingMode = sf_rm(rm);
+    softfloat_exceptionFlags = 0;
+}
+
+static inline void
+sf_end(void)
+{
+    fcsr |= softfloat_exceptionFlags;
+}
+
+/* -------------------------------------------------------------- */
+/* FPR accessors.  The lane is 128 bit wide (to hold Q values);   */
+/* single/double results are NaN-boxed per the RISC-V spec.        */
+/* -------------------------------------------------------------- */
+
+uint32_t
+fpr_read_s(uint32_t r)
+{
+    return (uint32_t)fpr[2 * r];
+}
+
+uint64_t
+fpr_read_d(uint32_t r)
+{
+    return fpr[2 * r];
+}
+
+void
+fpr_read_q(uint32_t r, float128_t *out)
+{
+    out->v[0] = fpr[2 * r];
+    out->v[1] = fpr[2 * r + 1];
+}
+
+void
+fpr_write_s(uint32_t r, uint32_t v)
+{
+    fpr[2 * r] = 0xFFFFFFFF00000000ULL | (uint64_t)v;
+    fpr[2 * r + 1] = 0xFFFFFFFFFFFFFFFFULL;
+}
+
+void
+fpr_write_d(uint32_t r, uint64_t v)
+{
+    fpr[2 * r] = v;
+    fpr[2 * r + 1] = 0xFFFFFFFFFFFFFFFFULL;
+}
+
+void
+fpr_write_q(uint32_t r, const float128_t *in)
+{
+    fpr[2 * r] = in->v[0];
+    fpr[2 * r + 1] = in->v[1];
+}
+
+/* ------------------------------- */
+/* NaN / class / min-max helpers   */
+/* ------------------------------- */
+
+static inline int
+is_nan_s(uint32_t x)
+{
+    return ((x & 0x7F800000u) == 0x7F800000u) && (x & 0x007FFFFFu) != 0;
+}
+
+static inline int
+is_nan_d(uint64_t x)
+{
+    return ((x & 0x7FF0000000000000ULL) == 0x7FF0000000000000ULL)
+        && (x & 0x000FFFFFFFFFFFFFULL) != 0;
+}
+
+static inline int
+is_nan_q(const float128_t *x)
+{
+    uint64_t hi = x->v[1];
+    if (((hi >> 48) & 0x7FFF) != 0x7FFF) return 0;
+    if (hi & 0x0000FFFFFFFFFFFFULL) return 1;
+    return x->v[0] != 0;
+}
+
+static uint32_t
+fclass_s(uint32_t x)
+{
+    uint32_t sign = (x >> 31) & 1;
+    uint32_t exp  = (x >> 23) & 0xFF;
+    uint32_t mant = x & 0x7FFFFF;
+
+    if (exp == 0xFF)
+    {
+        if (mant == 0) return sign ? (1u << 0) : (1u << 7);        /* +/- inf */
+        if (mant & 0x400000u) return (1u << 9);                    /* qNaN */
+        return (1u << 8);                                          /* sNaN */
+    }
+    if (exp == 0)
+    {
+        if (mant == 0) return sign ? (1u << 3) : (1u << 4);        /* +/- 0 */
+        return sign ? (1u << 2) : (1u << 5);                       /* subnormal */
+    }
+    return sign ? (1u << 1) : (1u << 6);                           /* normal */
+}
+
+static uint32_t
+fclass_d(uint64_t x)
+{
+    uint64_t sign = (x >> 63) & 1;
+    uint64_t exp  = (x >> 52) & 0x7FF;
+    uint64_t mant = x & 0xFFFFFFFFFFFFFULL;
+
+    if (exp == 0x7FF)
+    {
+        if (mant == 0) return sign ? (1u << 0) : (1u << 7);
+        if (mant & 0x8000000000000ULL) return (1u << 9);
+        return (1u << 8);
+    }
+    if (exp == 0)
+    {
+        if (mant == 0) return sign ? (1u << 3) : (1u << 4);
+        return sign ? (1u << 2) : (1u << 5);
+    }
+    return sign ? (1u << 1) : (1u << 6);
+}
+
+static uint32_t
+fclass_q(const float128_t *x)
+{
+    uint64_t hi = x->v[1], lo = x->v[0];
+    uint64_t sign = (hi >> 63) & 1;
+    uint64_t exp  = (hi >> 48) & 0x7FFF;
+    uint64_t mhi  = hi & 0x0000FFFFFFFFFFFFULL;
+
+    if (exp == 0x7FFF)
+    {
+        if (mhi == 0 && lo == 0) return sign ? (1u << 0) : (1u << 7);
+        if (mhi & (1ULL << 47)) return (1u << 9);                  /* qNaN */
+        return (1u << 8);                                          /* sNaN */
+    }
+    if (exp == 0)
+    {
+        if (mhi == 0 && lo == 0) return sign ? (1u << 3) : (1u << 4);
+        return sign ? (1u << 2) : (1u << 5);
+    }
+    return sign ? (1u << 1) : (1u << 6);
+}
+
+/* fmin/fmax implement the RISC-V behaviour (quiet NaN propagation and
+ * signed-zero rules) which differs from IEEE minNum/maxNum. */
+static uint32_t
+rv_fmin_s(uint32_t a, uint32_t b)
+{
+    int an = is_nan_s(a), bn = is_nan_s(b);
+    if (an && bn) return 0x7FC00000u;
+    if (an) return b;
+    if (bn) return a;
+    float32_t fa = { a }, fb = { b };
+    if (f32_eq(fa, fb)) return ((a >> 31) & 1) ? a : b;   /* min(+0,-0) = -0 */
+    return f32_lt(fa, fb) ? a : b;
+}
+
+static uint32_t
+rv_fmax_s(uint32_t a, uint32_t b)
+{
+    int an = is_nan_s(a), bn = is_nan_s(b);
+    if (an && bn) return 0x7FC00000u;
+    if (an) return b;
+    if (bn) return a;
+    float32_t fa = { a }, fb = { b };
+    if (f32_eq(fa, fb)) return ((a >> 31) & 1) ? b : a;   /* max(+0,-0) = +0 */
+    return f32_lt(fa, fb) ? b : a;
+}
+
+static uint64_t
+rv_fmin_d(uint64_t a, uint64_t b)
+{
+    int an = is_nan_d(a), bn = is_nan_d(b);
+    if (an && bn) return 0x7FF8000000000000ULL;
+    if (an) return b;
+    if (bn) return a;
+    float64_t fa = { a }, fb = { b };
+    if (f64_eq(fa, fb)) return ((a >> 63) & 1) ? a : b;
+    return f64_lt(fa, fb) ? a : b;
+}
+
+static uint64_t
+rv_fmax_d(uint64_t a, uint64_t b)
+{
+    int an = is_nan_d(a), bn = is_nan_d(b);
+    if (an && bn) return 0x7FF8000000000000ULL;
+    if (an) return b;
+    if (bn) return a;
+    float64_t fa = { a }, fb = { b };
+    if (f64_eq(fa, fb)) return ((a >> 63) & 1) ? b : a;
+    return f64_lt(fa, fb) ? b : a;
+}
+
+static void
+rv_fmin_q(const float128_t *a, const float128_t *b, float128_t *r)
+{
+    int an = is_nan_q(a), bn = is_nan_q(b);
+    if (an && bn)
+    {
+        r->v[0] = 0;
+        r->v[1] = 0x7FFF800000000000ULL;
+        return;
+    }
+    if (an)
+    {
+        *r = *b;
+        return;
+    }
+    if (bn)
+    {
+        *r = *a;
+        return;
+    }
+    if (f128M_eq(a, b))
+    {
+        *r = ((a->v[1] >> 63) & 1) ? *a : *b;
+        return;
+    }
+    *r = f128M_lt(a, b) ? *a : *b;
+}
+
+static void
+rv_fmax_q(const float128_t *a, const float128_t *b, float128_t *r)
+{
+    int an = is_nan_q(a), bn = is_nan_q(b);
+    if (an && bn)
+    {
+        r->v[0] = 0;
+        r->v[1] = 0x7FFF800000000000ULL;
+        return;
+    }
+    if (an)
+    {
+        *r = *b;
+        return;
+    }
+    if (bn)
+    {
+        *r = *a;
+        return;
+    }
+    if (f128M_eq(a, b))
+    {
+        *r = ((a->v[1] >> 63) & 1) ? *b : *a;
+        return;
+    }
+    *r = f128M_lt(a, b) ? *b : *a;
+}
+
+/* ---------------------------- */
+/* Single precision (F)         */
+/* ---------------------------- */
+
+static void
+s_add(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float32_t a = { fpr_read_s(rs1) }, b = { fpr_read_s(rs2) };
+    sf_begin(rm);
+    float32_t r = f32_add(a, b);
+    sf_end();
+    fpr_write_s(rd, r.v);
+}
+
+static void
+s_sub(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float32_t a = { fpr_read_s(rs1) }, b = { fpr_read_s(rs2) };
+    sf_begin(rm);
+    float32_t r = f32_sub(a, b);
+    sf_end();
+    fpr_write_s(rd, r.v);
+}
+
+static void
+s_mul(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float32_t a = { fpr_read_s(rs1) }, b = { fpr_read_s(rs2) };
+    sf_begin(rm);
+    float32_t r = f32_mul(a, b);
+    sf_end();
+    fpr_write_s(rd, r.v);
+}
+
+static void
+s_div(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float32_t a = { fpr_read_s(rs1) }, b = { fpr_read_s(rs2) };
+    sf_begin(rm);
+    float32_t r = f32_div(a, b);
+    sf_end();
+    fpr_write_s(rd, r.v);
+}
+
+static void
+s_sqrt(uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float32_t a = { fpr_read_s(rs1) };
+    sf_begin(rm);
+    float32_t r = f32_sqrt(a);
+    sf_end();
+    fpr_write_s(rd, r.v);
+}
+
+static void
+s_fsgnj(uint32_t rs2, uint32_t rs1, uint32_t op, uint32_t rd)
+{
+    uint32_t a = fpr_read_s(rs1), b = fpr_read_s(rs2), r;
+    switch (op)
+    {
+    case 0: r = (a & 0x7FFFFFFFu) | (b & 0x80000000u); break;
+    case 1: r = (a & 0x7FFFFFFFu) | ((b ^ 0x80000000u) & 0x80000000u); break;
+    default: r = (a & 0x7FFFFFFFu) | ((a ^ b) & 0x80000000u); break;
+    }
+    fpr_write_s(rd, r);
+}
+
+static void
+s_fmin(uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    fpr_write_s(rd, rv_fmin_s(fpr_read_s(rs1), fpr_read_s(rs2)));
+}
+
+static void
+s_fmax(uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    fpr_write_s(rd, rv_fmax_s(fpr_read_s(rs1), fpr_read_s(rs2)));
+}
+
+static void
+s_fclass(uint32_t rs1, uint32_t rd)
+{
+    reg_write(rd, fclass_s(fpr_read_s(rs1)));
+}
+
+static void
+s_fcmp(uint32_t op, uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    float32_t a = { fpr_read_s(rs1) }, b = { fpr_read_s(rs2) };
+    uint32_t r;
+    if (is_nan_s(a.v) || is_nan_s(b.v))
+    {
+        fcsr |= NV;
+        r = 0;
+    }
+    else if (op == 0)
+    {
+        r = f32_eq(a, b) ? 1 : 0;
+    }
+    else if (op == 1)
+    {
+        r = f32_lt(a, b) ? 1 : 0;
+    }
+    else
+    {
+        r = f32_le(a, b) ? 1 : 0;
+    }
+    reg_write(rd, r);
+}
+
+static void
+s_fma(uint32_t subop, uint32_t rs3, uint32_t rs2, uint32_t rs1, uint32_t rm,
+      uint32_t rd)
+{
+    float32_t a = { fpr_read_s(rs1) }, b = { fpr_read_s(rs2) },
+              c = { fpr_read_s(rs3) };
+    if (subop & 1) c.v ^= 0x80000000u;
+    if (subop & 2) a.v ^= 0x80000000u;
+    sf_begin(rm);
+    float32_t r = f32_mulAdd(a, b, c);
+    sf_end();
+    fpr_write_s(rd, r.v);
+}
+
+/* ---------------------------- */
+/* Double precision (D)         */
+/* ---------------------------- */
+
+#ifdef CONFIG_ENABLE_D_EXTENSION
+static void
+d_add(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float64_t a = { fpr_read_d(rs1) }, b = { fpr_read_d(rs2) };
+    sf_begin(rm);
+    float64_t r = f64_add(a, b);
+    sf_end();
+    fpr_write_d(rd, r.v);
+}
+
+static void
+d_sub(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float64_t a = { fpr_read_d(rs1) }, b = { fpr_read_d(rs2) };
+    sf_begin(rm);
+    float64_t r = f64_sub(a, b);
+    sf_end();
+    fpr_write_d(rd, r.v);
+}
+
+static void
+d_mul(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float64_t a = { fpr_read_d(rs1) }, b = { fpr_read_d(rs2) };
+    sf_begin(rm);
+    float64_t r = f64_mul(a, b);
+    sf_end();
+    fpr_write_d(rd, r.v);
+}
+
+static void
+d_div(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float64_t a = { fpr_read_d(rs1) }, b = { fpr_read_d(rs2) };
+    sf_begin(rm);
+    float64_t r = f64_div(a, b);
+    sf_end();
+    fpr_write_d(rd, r.v);
+}
+
+static void
+d_sqrt(uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float64_t a = { fpr_read_d(rs1) };
+    sf_begin(rm);
+    float64_t r = f64_sqrt(a);
+    sf_end();
+    fpr_write_d(rd, r.v);
+}
+
+static void
+d_fsgnj(uint32_t rs2, uint32_t rs1, uint32_t op, uint32_t rd)
+{
+    uint64_t a = fpr_read_d(rs1), b = fpr_read_d(rs2), r;
+    switch (op)
+    {
+    case 0: r = (a & 0x7FFFFFFFFFFFFFFFULL) | (b & 0x8000000000000000ULL); break;
+    case 1:
+        r = (a & 0x7FFFFFFFFFFFFFFFULL)
+            | ((b ^ 0x8000000000000000ULL) & 0x8000000000000000ULL);
+        break;
+    default:
+        r = (a & 0x7FFFFFFFFFFFFFFFULL)
+            | ((a ^ b) & 0x8000000000000000ULL);
+        break;
+    }
+    fpr_write_d(rd, r);
+}
+
+static void
+d_fmin(uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    fpr_write_d(rd, rv_fmin_d(fpr_read_d(rs1), fpr_read_d(rs2)));
+}
+
+static void
+d_fmax(uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    fpr_write_d(rd, rv_fmax_d(fpr_read_d(rs1), fpr_read_d(rs2)));
+}
+
+static void
+d_fclass(uint32_t rs1, uint32_t rd)
+{
+    reg_write(rd, fclass_d(fpr_read_d(rs1)));
+}
+
+static void
+d_fcmp(uint32_t op, uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    float64_t a = { fpr_read_d(rs1) }, b = { fpr_read_d(rs2) };
+    uint32_t r;
+    if (is_nan_d(a.v) || is_nan_d(b.v))
+    {
+        fcsr |= NV;
+        r = 0;
+    }
+    else if (op == 0)
+    {
+        r = f64_eq(a, b) ? 1 : 0;
+    }
+    else if (op == 1)
+    {
+        r = f64_lt(a, b) ? 1 : 0;
+    }
+    else
+    {
+        r = f64_le(a, b) ? 1 : 0;
+    }
+    reg_write(rd, r);
+}
+
+static void
+d_fma(uint32_t subop, uint32_t rs3, uint32_t rs2, uint32_t rs1, uint32_t rm,
+      uint32_t rd)
+{
+    float64_t a = { fpr_read_d(rs1) }, b = { fpr_read_d(rs2) },
+              c = { fpr_read_d(rs3) };
+    if (subop & 1) c.v ^= 0x8000000000000000ULL;
+    if (subop & 2) a.v ^= 0x8000000000000000ULL;
+    sf_begin(rm);
+    float64_t r = f64_mulAdd(a, b, c);
+    sf_end();
+    fpr_write_d(rd, r.v);
+}
+#endif // CONFIG_ENABLE_D_EXTENSION
+
+/* --------------------------- */
+/* Quad precision (Q)          */
+/* --------------------------- */
+
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+static void
+q_binop(void (*fn)(const float128_t *, const float128_t *, float128_t *),
+        uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float128_t a, b, r;
+    fpr_read_q(rs1, &a);
+    fpr_read_q(rs2, &b);
+    sf_begin(rm);
+    fn(&a, &b, &r);
+    sf_end();
+    fpr_write_q(rd, &r);
+}
+
+static void
+q_sqrt(uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float128_t a, r;
+    fpr_read_q(rs1, &a);
+    sf_begin(rm);
+    f128M_sqrt(&a, &r);
+    sf_end();
+    fpr_write_q(rd, &r);
+}
+
+static void
+q_fsgnj(uint32_t rs2, uint32_t rs1, uint32_t op, uint32_t rd)
+{
+    float128_t a, b, r;
+    fpr_read_q(rs1, &a);
+    fpr_read_q(rs2, &b);
+    uint64_t sign_a = a.v[1] & 0x8000000000000000ULL;
+    uint64_t sign_b = b.v[1] & 0x8000000000000000ULL;
+    r = a;
+    switch (op)
+    {
+    case 0:
+        r.v[1] = (a.v[1] & 0x7FFFFFFFFFFFFFFFULL) | sign_b;
+        break;
+    case 1:
+        r.v[1] = (a.v[1] & 0x7FFFFFFFFFFFFFFFULL)
+                 | (sign_b ^ 0x8000000000000000ULL);
+        break;
+    default:
+        r.v[1] = (a.v[1] & 0x7FFFFFFFFFFFFFFFULL) | (sign_a ^ sign_b);
+        break;
+    }
+    fpr_write_q(rd, &r);
+}
+
+static void
+q_fmin(uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    float128_t a, b, r;
+    fpr_read_q(rs1, &a);
+    fpr_read_q(rs2, &b);
+    rv_fmin_q(&a, &b, &r);
+    fpr_write_q(rd, &r);
+}
+
+static void
+q_fmax(uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    float128_t a, b, r;
+    fpr_read_q(rs1, &a);
+    fpr_read_q(rs2, &b);
+    rv_fmax_q(&a, &b, &r);
+    fpr_write_q(rd, &r);
+}
+
+static void
+q_fclass(uint32_t rs1, uint32_t rd)
+{
+    float128_t a;
+    fpr_read_q(rs1, &a);
+    reg_write(rd, fclass_q(&a));
+}
+
+static void
+q_fcmp(uint32_t op, uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    float128_t a, b;
+    fpr_read_q(rs1, &a);
+    fpr_read_q(rs2, &b);
+    uint32_t r;
+    if (is_nan_q(&a) || is_nan_q(&b))
+    {
+        fcsr |= NV;
+        r = 0;
+    }
+    else if (op == 0)
+    {
+        r = f128M_eq(&a, &b) ? 1 : 0;
+    }
+    else if (op == 1)
+    {
+        r = f128M_lt(&a, &b) ? 1 : 0;
+    }
+    else
+    {
+        r = f128M_le_quiet(&a, &b) ? 1 : 0;
+    }
+    reg_write(rd, r);
+}
+
+static void
+q_fma(uint32_t subop, uint32_t rs3, uint32_t rs2, uint32_t rs1, uint32_t rm,
+      uint32_t rd)
+{
+    float128_t a, b, c, r;
+    fpr_read_q(rs1, &a);
+    fpr_read_q(rs2, &b);
+    fpr_read_q(rs3, &c);
+    if (subop & 1) c.v[1] ^= 0x8000000000000000ULL;
+    if (subop & 2) a.v[1] ^= 0x8000000000000000ULL;
+    sf_begin(rm);
+    f128M_mulAdd(&a, &b, &c, &r);
+    sf_end();
+    fpr_write_q(rd, &r);
+}
+#endif // CONFIG_ENABLE_Q_EXTENSION
+
+/* ----------------------------- */
+/* Load / store                  */
+/* ----------------------------- */
+
+#ifdef CONFIG_SUPPORT_MISALIGN
+static uint64_t
+load64(uint32_t addr)
+{
+    if (unlikely(!is_aligned(addr, 8)))
+    {
+        uint64_t v = 0;
+        for (int i = 0; i < 8; i++)
+        {
+            v |= (uint64_t)mem_read8_unsigned(addr + i) << (8 * i);
+        }
+        return v;
+    }
+    return mem_read64_unsigned(addr);
+}
+
+static void
+store64(uint32_t addr, uint64_t val)
+{
+    if (unlikely(!is_aligned(addr, 8)))
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            mem_write8(addr + i, (val >> (8 * i)) & 0xFF);
+        }
+        return;
+    }
+    mem_write64(addr, val);
+}
+#endif
+
 void
 insf_flw(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
+    uint32_t addr = reg_read(rs1) + imm;
+    uint32_t val;
+#ifdef CONFIG_SUPPORT_MISALIGN
+    if (unlikely(!is_aligned(addr, 4)))
+        val = misaligned_load32(addr);
+    else
+#endif
+        val = mem_read32_unsigned(addr);
+    fpr_write_s(rd, val);
 }
 
 void
 insf_fsw(uint32_t imm, uint32_t rs1, uint32_t rs2)
 {
+    uint32_t addr = reg_read(rs1) + imm;
+    uint32_t val = fpr_read_s(rs2);
+#ifdef CONFIG_SUPPORT_MISALIGN
+    if (unlikely(!is_aligned(addr, 4)))
+        misaligned_store32(addr, val);
+    else
+#endif
+        mem_write32(addr, val);
 }
 
+void
+insf_fld(uint32_t imm, uint32_t rs1, uint32_t rd)
+{
+    uint32_t addr = reg_read(rs1) + imm;
+    uint64_t val;
+#ifdef CONFIG_SUPPORT_MISALIGN
+    val = load64(addr);
+#else
+    val = mem_read64_unsigned(addr);
 #endif
+    fpr_write_d(rd, val);
+}
+
+void
+insf_fsd(uint32_t imm, uint32_t rs1, uint32_t rs2)
+{
+    uint32_t addr = reg_read(rs1) + imm;
+    uint64_t val = fpr_read_d(rs2);
+#ifdef CONFIG_SUPPORT_MISALIGN
+    store64(addr, val);
+#else
+    mem_write64(addr, val);
+#endif
+}
+
+void
+insf_flq(uint32_t imm, uint32_t rs1, uint32_t rd)
+{
+    uint32_t addr = reg_read(rs1) + imm;
+    float128_t v;
+#ifdef CONFIG_SUPPORT_MISALIGN
+    if (unlikely(!is_aligned(addr, 16)))
+    {
+        v.v[0] = 0;
+        v.v[1] = 0;
+        for (int i = 0; i < 8; i++)
+            v.v[0] |= (uint64_t)mem_read8_unsigned(addr + i) << (8 * i);
+        for (int i = 0; i < 8; i++)
+            v.v[1] |= (uint64_t)mem_read8_unsigned(addr + 8 + i) << (8 * i);
+    }
+    else
+#endif
+    {
+        v.v[0] = mem_read64_unsigned(addr);
+        v.v[1] = mem_read64_unsigned(addr + 8);
+    }
+    fpr_write_q(rd, &v);
+}
+
+void
+insf_fsq(uint32_t imm, uint32_t rs1, uint32_t rs2)
+{
+    uint32_t addr = reg_read(rs1) + imm;
+    float128_t v;
+    fpr_read_q(rs2, &v);
+#ifdef CONFIG_SUPPORT_MISALIGN
+    if (unlikely(!is_aligned(addr, 16)))
+    {
+        for (int i = 0; i < 8; i++)
+            mem_write8(addr + i, (v.v[0] >> (8 * i)) & 0xFF);
+        for (int i = 0; i < 8; i++)
+            mem_write8(addr + 8 + i, (v.v[1] >> (8 * i)) & 0xFF);
+    }
+    else
+#endif
+    {
+        mem_write64(addr, v.v[0]);
+        mem_write64(addr + 8, v.v[1]);
+    }
+}
+
+/* ----------------------------- */
+/* FCVT helpers                  */
+/* ----------------------------- */
+
+/* fp -> int : kind 0=w 1=wu 2=l 3=lu ; reads frs1 as fmt precision */
+static uint32_t
+fcvt_fp_int(uint32_t fmt, uint32_t kind, uint32_t rs1, uint32_t rm)
+{
+    uint32_t r = 0;
+    uint_fast8_t mode;
+    sf_begin(rm);
+    mode = softfloat_roundingMode;
+    switch (fmt)
+    {
+    case S:
+    {
+        float32_t a = { fpr_read_s(rs1) };
+        if (kind == 0) r = (uint32_t)f32_to_i32(a, mode, true);
+        else if (kind == 1) r = (uint32_t)f32_to_ui32(a, mode, true);
+        else if (kind == 2) r = (uint32_t)f32_to_i64(a, mode, true);
+        else r = (uint32_t)f32_to_ui64(a, mode, true);
+        break;
+    }
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D:
+    {
+        float64_t a = { fpr_read_d(rs1) };
+        if (kind == 0) r = (uint32_t)f64_to_i32(a, mode, true);
+        else if (kind == 1) r = (uint32_t)f64_to_ui32(a, mode, true);
+        else if (kind == 2) r = (uint32_t)f64_to_i64(a, mode, true);
+        else r = (uint32_t)f64_to_ui64(a, mode, true);
+        break;
+    }
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q:
+    {
+        float128_t a;
+        fpr_read_q(rs1, &a);
+        if (kind == 0) r = (uint32_t)f128M_to_i32(&a, mode, true);
+        else if (kind == 1) r = (uint32_t)f128M_to_ui32(&a, mode, true);
+        else if (kind == 2) r = (uint32_t)f128M_to_i64(&a, mode, true);
+        else r = (uint32_t)f128M_to_ui64(&a, mode, true);
+        break;
+    }
+#endif
+    default:
+        fatal("fcvt.fp->int: unsupported fmt=%u", fmt);
+    }
+    sf_end();
+    return r;
+}
+
+/* int -> fp : kind 0=w 1=wu 2=l 3=lu ; writes to fpr as fmt precision */
+static void
+fcvt_int_fp(uint32_t fmt, uint32_t kind, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    int32_t v = (int32_t)reg_read(rs1);
+    uint32_t uv = reg_read(rs1);
+    sf_begin(rm);
+    switch (fmt)
+    {
+    case S:
+    {
+        float32_t r;
+        if (kind == 0) r = i32_to_f32(v);
+        else if (kind == 1) r = ui32_to_f32(uv);
+        else if (kind == 2) r = i64_to_f32((int64_t)v);
+        else r = ui64_to_f32((uint64_t)uv);
+        sf_end();
+        fpr_write_s(rd, r.v);
+        return;
+    }
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D:
+    {
+        float64_t r;
+        if (kind == 0) r = i32_to_f64(v);
+        else if (kind == 1) r = ui32_to_f64(uv);
+        else if (kind == 2) r = i64_to_f64((int64_t)v);
+        else r = ui64_to_f64((uint64_t)uv);
+        sf_end();
+        fpr_write_d(rd, r.v);
+        return;
+    }
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q:
+    {
+        float128_t r;
+        if (kind == 0) i32_to_f128M(v, &r);
+        else if (kind == 1) ui32_to_f128M(uv, &r);
+        else if (kind == 2) i64_to_f128M((int64_t)v, &r);
+        else ui64_to_f128M((uint64_t)uv, &r);
+        sf_end();
+        fpr_write_q(rd, &r);
+        return;
+    }
+#endif
+    default:
+        sf_end();
+        fatal("fcvt.int->fp: unsupported fmt=%u", fmt);
+    }
+}
+
+/* fp -> fp : dfmt = dest precision, sfmt = source precision */
+static void
+fcvt_fp_fp(uint32_t dfmt, uint32_t sfmt, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    if (dfmt == S)
+    {
+#if defined(CONFIG_ENABLE_D_EXTENSION)
+        if (sfmt == D)
+        {
+            float64_t a = { fpr_read_d(rs1) };
+            sf_begin(rm);
+            float32_t r = f64_to_f32(a);
+            sf_end();
+            fpr_write_s(rd, r.v);
+            return;
+        }
+#endif
+#if defined(CONFIG_ENABLE_Q_EXTENSION)
+        if (sfmt == Q)
+        {
+            float128_t a;
+            fpr_read_q(rs1, &a);
+            sf_begin(rm);
+            float32_t r = f128M_to_f32(&a);
+            sf_end();
+            fpr_write_s(rd, r.v);
+            return;
+        }
+#endif
+        fatal("fcvt S<-%u: unsupported", sfmt);
+    }
+    else if (dfmt == D)
+    {
+#if defined(CONFIG_ENABLE_D_EXTENSION)
+        if (sfmt == S)
+        {
+            float32_t a = { fpr_read_s(rs1) };
+            sf_begin(rm);
+            float64_t r = f32_to_f64(a);
+            sf_end();
+            fpr_write_d(rd, r.v);
+            return;
+        }
+#if defined(CONFIG_ENABLE_Q_EXTENSION)
+        if (sfmt == Q)
+        {
+            float128_t a;
+            fpr_read_q(rs1, &a);
+            sf_begin(rm);
+            float64_t r = f128M_to_f64(&a);
+            sf_end();
+            fpr_write_d(rd, r.v);
+            return;
+        }
+#endif
+#endif
+        fatal("fcvt D<-%u: unsupported", sfmt);
+    }
+    else if (dfmt == Q)
+    {
+#if defined(CONFIG_ENABLE_Q_EXTENSION)
+        if (sfmt == S)
+        {
+            float32_t a = { fpr_read_s(rs1) };
+            float128_t r;
+            f32_to_f128M(a, &r);
+            fpr_write_q(rd, &r);
+            return;
+        }
+#if defined(CONFIG_ENABLE_D_EXTENSION)
+        if (sfmt == D)
+        {
+            float64_t a = { fpr_read_d(rs1) };
+            float128_t r;
+            f64_to_f128M(a, &r);
+            fpr_write_q(rd, &r);
+            return;
+        }
+#endif
+#endif
+        fatal("fcvt Q<-%u: unsupported", sfmt);
+    }
+    else
+    {
+        fatal("fcvt.fp->fp: unsupported dest fmt=%u", dfmt);
+    }
+}
+
+/* ----------------------------- */
+/* Public dispatchers            */
+/* ----------------------------- */
+
+static void
+do_fadd(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    switch (fmt)
+    {
+    case S: s_add(rs2, rs1, rm, rd); break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D: d_add(rs2, rs1, rm, rd); break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q: q_binop(&f128M_add, rs2, rs1, rm, rd); break;
+#endif
+    default: fatal("fadd: unsupported fmt=%u", fmt);
+    }
+}
+
+static void
+do_fsub(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    switch (fmt)
+    {
+    case S: s_sub(rs2, rs1, rm, rd); break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D: d_sub(rs2, rs1, rm, rd); break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q: q_binop(&f128M_sub, rs2, rs1, rm, rd); break;
+#endif
+    default: fatal("fsub: unsupported fmt=%u", fmt);
+    }
+}
+
+static void
+do_fmul(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    switch (fmt)
+    {
+    case S: s_mul(rs2, rs1, rm, rd); break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D: d_mul(rs2, rs1, rm, rd); break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q: q_binop(&f128M_mul, rs2, rs1, rm, rd); break;
+#endif
+    default: fatal("fmul: unsupported fmt=%u", fmt);
+    }
+}
+
+static void
+do_fdiv(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    switch (fmt)
+    {
+    case S: s_div(rs2, rs1, rm, rd); break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D: d_div(rs2, rs1, rm, rd); break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q: q_binop(&f128M_div, rs2, rs1, rm, rd); break;
+#endif
+    default: fatal("fdiv: unsupported fmt=%u", fmt);
+    }
+}
+
+static void
+do_fsqrt(uint32_t fmt, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    switch (fmt)
+    {
+    case S: s_sqrt(rs1, rm, rd); break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D: d_sqrt(rs1, rm, rd); break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q: q_sqrt(rs1, rm, rd); break;
+#endif
+    default: fatal("fsqrt: unsupported fmt=%u", fmt);
+    }
+}
+
+static void
+do_fsgnj(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t op, uint32_t rd)
+{
+    switch (fmt)
+    {
+    case S: s_fsgnj(rs2, rs1, op, rd); break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D: d_fsgnj(rs2, rs1, op, rd); break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q: q_fsgnj(rs2, rs1, op, rd); break;
+#endif
+    default: fatal("fsgnj: unsupported fmt=%u", fmt);
+    }
+}
+
+static void
+do_fminmax(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t op, uint32_t rd)
+{
+    switch (fmt)
+    {
+    case S:
+        if (op == 0) s_fmin(rs2, rs1, rd);
+        else s_fmax(rs2, rs1, rd);
+        break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D:
+        if (op == 0) d_fmin(rs2, rs1, rd);
+        else d_fmax(rs2, rs1, rd);
+        break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q:
+        if (op == 0) q_fmin(rs2, rs1, rd);
+        else q_fmax(rs2, rs1, rd);
+        break;
+#endif
+    default: fatal("fmin/fmax: unsupported fmt=%u", fmt);
+    }
+}
+
+static void
+do_fcmp(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t op, uint32_t rd)
+{
+    switch (fmt)
+    {
+    case S: s_fcmp(op, rs2, rs1, rd); break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D: d_fcmp(op, rs2, rs1, rd); break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q: q_fcmp(op, rs2, rs1, rd); break;
+#endif
+    default: fatal("fcmp: unsupported fmt=%u", fmt);
+    }
+}
+
+static void
+do_fclass(uint32_t fmt, uint32_t rs1, uint32_t rd)
+{
+    switch (fmt)
+    {
+    case S: s_fclass(rs1, rd); break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D: d_fclass(rs1, rd); break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q: q_fclass(rs1, rd); break;
+#endif
+    default: fatal("fclass: unsupported fmt=%u", fmt);
+    }
+}
+
+void
+insf_r_fma(uint32_t ins, uint32_t subop)
+{
+    uint32_t fmt = (ins >> 25) & 3;
+    uint32_t rs3 = (ins >> 27) & 0x1F;
+    uint32_t rs2 = (ins >> 20) & 0x1F;
+    uint32_t rs1 = (ins >> 15) & 0x1F;
+    uint32_t rm  = (ins >> 12) & 7;
+    uint32_t rd  = (ins >> 7) & 0x1F;
+
+    switch (fmt)
+    {
+    case S: s_fma(subop, rs3, rs2, rs1, rm, rd); break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case D: d_fma(subop, rs3, rs2, rs1, rm, rd); break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case Q: q_fma(subop, rs3, rs2, rs1, rm, rd); break;
+#endif
+    default: fatal("FMA: unsupported fmt=%u", fmt);
+    }
+}
+
+void
+insf_r_fpop(uint32_t ins)
+{
+    uint32_t op  = (ins >> 27) & 0x1F;
+    uint32_t fmt = (ins >> 25) & 3;
+    uint32_t rs2 = (ins >> 20) & 0x1F;
+    uint32_t rs1 = (ins >> 15) & 0x1F;
+    uint32_t f3  = (ins >> 12) & 7;
+    uint32_t rd  = (ins >> 7) & 0x1F;
+
+    switch (op)
+    {
+    case 0:  do_fadd(fmt, rs2, rs1, f3, rd); break;
+    case 1:  do_fsub(fmt, rs2, rs1, f3, rd); break;
+    case 2:  do_fmul(fmt, rs2, rs1, f3, rd); break;
+    case 3:  do_fdiv(fmt, rs2, rs1, f3, rd); break;
+    case 4:  do_fsgnj(fmt, rs2, rs1, f3, rd); break;
+    case 5:  do_fminmax(fmt, rs2, rs1, f3, rd); break;
+    case 11: do_fsqrt(fmt, rs1, f3, rd); break;
+    case 20: do_fcmp(fmt, rs2, rs1, f3, rd); break;
+    case 28: /* fmv.x.* (funct3=0) or fclass (funct3=1) */
+        if (f3 == 0)
+        {
+            /* fmv.x.* : fp -> integer, raw bits copied (RV32 keeps low 32) */
+            switch (fmt)
+            {
+            case S: reg_write(rd, fpr_read_s(rs1)); break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+            case D: reg_write(rd, (uint32_t)fpr_read_d(rs1)); break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+            case Q: reg_write(rd, (uint32_t)fpr[2 * rs1]); break;
+#endif
+            default: fatal("fmv.x.*: unsupported fmt=%u", fmt);
+            }
+        }
+        else if (f3 == 1)
+        {
+            do_fclass(fmt, rs1, rd);
+        }
+        else
+        {
+            fatal("FP-OP op=28: invalid funct3=%u", f3);
+        }
+        break;
+    case 30: /* fmv.*.x : integer -> fp */
+        if (f3 != 0 || rs2 != 0)
+            fatal("fmv.*.x: invalid f3=%u rs2=%u", f3, rs2);
+        switch (fmt)
+        {
+        case S: fpr_write_s(rd, reg_read(rs1)); break;
+#ifdef CONFIG_ENABLE_D_EXTENSION
+        case D: fpr_write_d(rd, (uint64_t)reg_read(rs1)); break;
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+        case Q:
+        {
+            float128_t r;
+            r.v[0] = reg_read(rs1);
+            r.v[1] = 0;
+            fpr_write_q(rd, &r);
+            break;
+        }
+#endif
+        default: fatal("fmv.*.x: unsupported fmt=%u", fmt);
+        }
+        break;
+    /* FCVT: top-5 bits distinguish direction */
+    case 24: /* fp -> int */
+        reg_write(rd, fcvt_fp_int(fmt, rs2, rs1, f3));
+        break;
+    case 26: /* int -> fp */
+        fcvt_int_fp(fmt, rs2, rs1, f3, rd);
+        break;
+    case 8:  /* fp -> fp : rs2 = source precision */
+        fcvt_fp_fp(fmt, rs2, rs1, f3, rd);
+        break;
+    default:
+        fatal("unsupported FP-OP op=%u ins=0x%08x", op, ins);
+    }
+}
+
+#endif // CONFIG_ENABLE_F_EXTENSION

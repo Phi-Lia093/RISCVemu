@@ -17,6 +17,8 @@ cp "$SOURCE_DIR/tests/isa/"rv32um*-p-* "$BUILD_DIR/tests/tmp/"
 cp "$SOURCE_DIR/tests/isa/"rv32ua*-p-* "$BUILD_DIR/tests/tmp/"
 cp "$SOURCE_DIR/tests/isa/"rv32mi-p-zicntr "$BUILD_DIR/tests/tmp/"
 cp "$SOURCE_DIR/tests/isa/"rv32uzicond-p-* "$BUILD_DIR/tests/tmp/"
+cp "$SOURCE_DIR/tests/isa/"rv32uf*-p-* "$BUILD_DIR/tests/tmp/"
+cp "$SOURCE_DIR/tests/isa/"rv32ud*-p-* "$BUILD_DIR/tests/tmp/"
 
 # Convert all non-bin files to bin
 for file in "$BUILD_DIR/tests/tmp/"*; do

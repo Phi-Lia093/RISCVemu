@@ -96,6 +96,59 @@ reg_name(uint32_t id)
     return (id < 32) ? regs[id] : "?";
 }
 
+static const char *
+freg_name(uint32_t id)
+{
+    static const char *fregs[]
+        = { "f0",  "f1",  "f2",  "f3",  "f4",  "f5",  "f6",  "f7",
+            "f8",  "f9",  "f10", "f11", "f12", "f13", "f14", "f15",
+            "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
+            "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31" };
+    return (id < 32) ? fregs[id] : "?";
+}
+
+static const char *
+rm_name(uint32_t rm)
+{
+    static const char *names[]
+        = { "rne", "rtz", "rdn", "rup", "rmm", "dyn", "dyn", "dyn" };
+    return (rm < 5) ? names[rm] : "?";
+}
+
+static const char *
+fmt_name(uint32_t fmt)
+{
+    switch (fmt)
+    {
+    case 0:
+        return "s";
+    case 1:
+        return "d";
+    case 2:
+        return "q";
+    default:
+        return "?";
+    }
+}
+
+static const char *
+fcvt_kind_name(uint32_t kind)
+{
+    switch (kind)
+    {
+    case 0:
+        return "w";
+    case 1:
+        return "wu";
+    case 2:
+        return "l";
+    case 3:
+        return "lu";
+    default:
+        return "?";
+    }
+}
+
 char *
 disasm(uint32_t ins)
 {
@@ -116,6 +169,197 @@ disasm(uint32_t ins)
 
     switch (opcode) // keep consistent with exec.c
     {
+    // FP Load (FLW / FLD / FLQ)
+    case 0b0000111:
+    {
+        uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
+        switch (funct3)
+        {
+        case 2: // FLW
+            sprintf(disasm_buf, "flw %s, %d(%s)", freg_name(rd), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        case 3: // FLD
+            sprintf(disasm_buf, "fld %s, %d(%s)", freg_name(rd), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        case 4: // FLQ
+            sprintf(disasm_buf, "flq %s, %d(%s)", freg_name(rd), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        default:
+            goto unknown;
+        }
+        break;
+    }
+
+    // FP Store (FSW / FSD / FSQ)
+    case 0b0100111:
+    {
+        uint32_t imm = ((ins >> 25) & 0x7F) << 5;
+        imm |= ((ins >> 7) & 0x1F);
+        imm = sign_extend_12(imm);
+        switch (funct3)
+        {
+        case 2: // FSW
+            sprintf(disasm_buf, "fsw %s, %d(%s)", freg_name(rs2), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        case 3: // FSD
+            sprintf(disasm_buf, "fsd %s, %d(%s)", freg_name(rs2), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        case 4: // FSQ
+            sprintf(disasm_buf, "fsq %s, %d(%s)", freg_name(rs2), (int32_t)imm,
+                    reg_name(rs1));
+            break;
+        default:
+            goto unknown;
+        }
+        break;
+    }
+
+    // FMA: fmadd / fmsub / fnmsub / fnmadd
+    case 0b1000011: // fmadd
+    case 0b1000111: // fmsub
+    case 0b1001011: // fnmsub
+    case 0b1001111: // fnmadd
+    {
+        uint32_t fmt = (ins >> 25) & 3;
+        uint32_t rs3 = (ins >> 27) & 0x1F;
+        uint32_t rm = (ins >> 12) & 7;
+        const char *mnemonic;
+        switch (opcode)
+        {
+        case 0b1000011:
+            mnemonic = "fmadd";
+            break;
+        case 0b1000111:
+            mnemonic = "fmsub";
+            break;
+        case 0b1001011:
+            mnemonic = "fnmsub";
+            break;
+        case 0b1001111:
+            mnemonic = "fnmadd";
+            break;
+        default:
+            mnemonic = "?";
+            break;
+        }
+        sprintf(disasm_buf, "%s.%s %s, %s, %s, %s, %s", mnemonic, fmt_name(fmt),
+                freg_name(rd), freg_name(rs1), freg_name(rs2), freg_name(rs3),
+                rm_name(rm));
+        break;
+    }
+
+    // FP-OP
+    case 0b1010011:
+    {
+        uint32_t op = (ins >> 27) & 0x1F;
+        uint32_t fmt = (ins >> 25) & 3;
+        uint32_t rm = (ins >> 12) & 7;
+
+        switch (op)
+        {
+        case 0: // FADD
+            sprintf(disasm_buf, "fadd.%s %s, %s, %s, %s", fmt_name(fmt),
+                    freg_name(rd), freg_name(rs1), freg_name(rs2), rm_name(rm));
+            break;
+        case 1: // FSUB
+            sprintf(disasm_buf, "fsub.%s %s, %s, %s, %s", fmt_name(fmt),
+                    freg_name(rd), freg_name(rs1), freg_name(rs2), rm_name(rm));
+            break;
+        case 2: // FMUL
+            sprintf(disasm_buf, "fmul.%s %s, %s, %s, %s", fmt_name(fmt),
+                    freg_name(rd), freg_name(rs1), freg_name(rs2), rm_name(rm));
+            break;
+        case 3: // FDIV
+            sprintf(disasm_buf, "fdiv.%s %s, %s, %s, %s", fmt_name(fmt),
+                    freg_name(rd), freg_name(rs1), freg_name(rs2), rm_name(rm));
+            break;
+        case 4: // FSGNJ / FSGNJN / FSGNJX
+        {
+            const char *subop[] = { "fsgnj", "fsgnjn", "fsgnjx" };
+            sprintf(disasm_buf, "%s.%s %s, %s, %s", subop[funct3],
+                    fmt_name(fmt), freg_name(rd), freg_name(rs1),
+                    freg_name(rs2));
+            break;
+        }
+        case 5: // FMIN / FMAX
+        {
+            const char *subop[] = { "fmin", "fmax" };
+            sprintf(disasm_buf, "%s.%s %s, %s, %s", subop[funct3],
+                    fmt_name(fmt), freg_name(rd), freg_name(rs1),
+                    freg_name(rs2));
+            break;
+        }
+        case 11: // FSQRT
+            sprintf(disasm_buf, "fsqrt.%s %s, %s, %s", fmt_name(fmt),
+                    freg_name(rd), freg_name(rs1), rm_name(rm));
+            break;
+        case 20: // FEQ / FLT / FLE
+        {
+            const char *subop[] = { "feq", "flt", "fle" };
+            sprintf(disasm_buf, "%s.%s %s, %s, %s", subop[funct3],
+                    fmt_name(fmt), reg_name(rd), freg_name(rs1),
+                    freg_name(rs2));
+            break;
+        }
+        case 28: // FMV.X.* / FCLASS
+            if (funct3 == 0)
+            {
+                // fmv.x.*
+                const char *subop[] = { "fmv.x.s", "fmv.x.d", "fmv.x.q" };
+                sprintf(disasm_buf, "%s %s, %s", subop[fmt], reg_name(rd),
+                        freg_name(rs1));
+            }
+            else if (funct3 == 1)
+            {
+                // fclass
+                sprintf(disasm_buf, "fclass.%s %s, %s", fmt_name(fmt),
+                        reg_name(rd), freg_name(rs1));
+            }
+            else
+            {
+                goto unknown;
+            }
+            break;
+        case 30: // FMV.*.X
+        {
+            const char *subop[] = { "fmv.s.x", "fmv.d.x", "fmv.q.x" };
+            sprintf(disasm_buf, "%s %s, %s", subop[fmt], freg_name(rd),
+                    reg_name(rs1));
+            break;
+        }
+        case 24: // FCVT.* (fp -> int)
+        {
+            const char *kinds[] = { "w", "wu", "l", "lu" };
+            // rs2 编码了源精度
+            uint32_t sfmt = rs2;
+            sprintf(disasm_buf, "fcvt.%s.%s %s, %s, %s", kinds[rs2 & 3],
+                    fmt_name(fmt), reg_name(rd), freg_name(rs1), rm_name(rm));
+            break;
+        }
+        case 26: // FCVT.* (int -> fp)
+        {
+            const char *kinds[] = { "w", "wu", "l", "lu" };
+            sprintf(disasm_buf, "fcvt.%s.%s %s, %s, %s", fmt_name(fmt),
+                    kinds[rs2 & 3], freg_name(rd), reg_name(rs1), rm_name(rm));
+            break;
+        }
+        case 8: // FCVT (fp -> fp)
+        {
+            uint32_t sfmt = rs2; // source precision
+            sprintf(disasm_buf, "fcvt.%s.%s %s, %s, %s", fmt_name(fmt),
+                    fmt_name(sfmt), freg_name(rd), freg_name(rs1), rm_name(rm));
+            break;
+        }
+        default:
+            goto unknown;
+        }
+        break;
+    }
     // R format
     case 0b0110011:
     {

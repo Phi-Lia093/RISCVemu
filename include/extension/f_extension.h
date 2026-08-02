@@ -25,17 +25,27 @@
 
 #ifdef CONFIG_ENABLE_F_EXTENSION
 #include <stdint.h>
+#include <softfloat.h>
+
 extern uint64_t fpr[sizeof(__float128) * 32 / sizeof(uint64_t)]; // max 32*QWORD
 
 extern uint32_t fcsr;
 
-uint32_t get_fflags();
-uint32_t get_frm();
-uint32_t get_fcsr();
+uint32_t get_fflags(void);
+uint32_t get_frm(void);
+uint32_t get_fcsr(void);
 
 void set_fflags(uint32_t flags);
 void set_frm(uint32_t frm);
 void set_fcsr(uint32_t csr);
+
+/* FPR accessors - exported for debugger and other modules */
+uint32_t fpr_read_s(uint32_t r);
+uint64_t fpr_read_d(uint32_t r);
+void fpr_read_q(uint32_t r, float128_t *out);
+void fpr_write_s(uint32_t r, uint32_t v);
+void fpr_write_d(uint32_t r, uint64_t v);
+void fpr_write_q(uint32_t r, const float128_t *in);
 
 #define CSR_FFLAGS 0x001
 #define CSR_FRM 0x002
@@ -48,22 +58,38 @@ void set_fcsr(uint32_t csr);
 #define RMM 0b100 // round to nearest even
 #define DYN 0b111 // dynamic rounding mode
 
-#define NX 0b1;     // non-exact
-#define UF 0b10;    // underflow
-#define OF 0b100;   // overflow
-#define DZ 0b1000;  // divide by zero
-#define NV 0b10000; // invalid operation
+#define NX 0b1     // non-exact
+#define UF 0b10    // underflow
+#define OF 0b100   // overflow
+#define DZ 0b1000  // divide by zero
+#define NV 0b10000 // invalid operation
 
-#define S 0b00; // single precision
-#define D 0b01; // double precision
-#define H 0b10; // half precision
-#define Q 0b11; // quad precision
+#define S 0b00 // single precision
+#define D 0b01 // double precision
+#define H 0b10 // half precision
+#define Q 0b11 // quad precision
 
 static inline uint32_t
 get_rm(uint32_t rm)
 {
     return (rm == DYN) ? (fcsr >> 5) & 0b111 : rm;
 }
+
+/* FP load / store */
+void insf_flw(uint32_t imm, uint32_t rs1, uint32_t rd);
+void insf_fsw(uint32_t imm, uint32_t rs1, uint32_t rs2);
+void insf_fld(uint32_t imm, uint32_t rs1, uint32_t rd);
+void insf_fsd(uint32_t imm, uint32_t rs1, uint32_t rs2);
+void insf_flq(uint32_t imm, uint32_t rs1, uint32_t rd);
+void insf_fsq(uint32_t imm, uint32_t rs1, uint32_t rs2);
+
+/* Fused multiply-add (opcode 0x43 family).
+ * subop: 0=fmadd, 1=fmsub, 2=fnmsub, 3=fnmadd.
+ * rs3 is the addend register; rs1/rs2 are the multiplicands. */
+void insf_r_fma(uint32_t ins, uint32_t subop);
+
+/* FP-OP (opcode 0x53). ins is the full instruction word. */
+void insf_r_fpop(uint32_t ins);
 
 #endif // CONFIG_ENABLE_F_EXTENSION
 

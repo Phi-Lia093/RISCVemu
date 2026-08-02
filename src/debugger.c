@@ -30,11 +30,30 @@
 
 #include <config.h>
 
+#ifdef CONFIG_ENABLE_F_EXTENSION
+#include <extension/f_extension.h>
+#endif
+
 #ifdef CONFIG_ENABLE_DEBUGGER
 
 static char last_cmd[256] = { 0 };
 
 static int show_disasm = 1; // 1 = show disassembly, 0 = show raw hex
+
+static const char *reg_names[]
+    = { "zero", "ra", "sp",  "gp",  "tp", "t0", "t1", "t2",
+        "s0",   "s1", "a0",  "a1",  "a2", "a3", "a4", "a5",
+        "a6",   "a7", "s2",  "s3",  "s4", "s5", "s6", "s7",
+        "s8",   "s9", "s10", "s11", "t3", "t4", "t5", "t6" };
+
+#ifdef CONFIG_ENABLE_F_EXTENSION
+static const char *freg_names[] = {
+    "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",
+    "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
+    "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
+    "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31"
+};
+#endif
 
 static void cmd_set_pc(char *args);
 static void cmd_set_register(char *args);
@@ -53,6 +72,15 @@ static void cmd_help(void);
 static void cmd_disasm(char *args);
 static void cmd_toggle_disasm(void);
 
+#ifdef CONFIG_ENABLE_F_EXTENSION
+static void cmd_fregisters(void);
+static void cmd_set_fregister(char *args);
+static void cmd_fcsr(void);
+static void cmd_set_fcsr(char *args);
+static void cmd_fdump(char *args);
+static void cmd_frm(void);
+#endif
+
 void
 init_debugger(void)
 {
@@ -63,12 +91,6 @@ init_debugger(void)
 static void
 print_registers(void)
 {
-    const char *reg_names[]
-        = { "zero", "ra", "sp",  "gp",  "tp", "t0", "t1", "t2",
-            "s0",   "s1", "a0",  "a1",  "a2", "a3", "a4", "a5",
-            "a6",   "a7", "s2",  "s3",  "s4", "s5", "s6", "s7",
-            "s8",   "s9", "s10", "s11", "t3", "t4", "t5", "t6" };
-
     printf("PC=0x%08x\n", g_state.pc);
     printf("REGISTERS:\n");
 
@@ -299,14 +321,14 @@ cmd_breakpoint_clear(void)
 static void
 cmd_help(void)
 {
-    printf("RV32IM Debugger Commands:\n");
+    printf("RV32IMAFDQ Debugger Commands:\n");
     printf("  s           - Single step\n");
     printf("  n           - Single step (alias)\n");
     printf("  c           - Continue execution\n");
     printf("  q           - Quit emulator\n");
-    printf("  r           - Print registers\n");
+    printf("  r           - Print integer registers\n");
     printf("  p <addr>    - Set Program Counter (PC)\n");
-    printf("  R <reg> <v> - Set register value (reg: 0-31 or name)\n");
+    printf("  R <reg> <v> - Set integer register value (reg: 0-31 or name)\n");
     printf("  m <addr>... - Display memory at address(es)\n");
     printf("  d <s> <e>   - Dump memory range\n");
     printf("  B <a> [c]   - Dump bytes from address (count default=16)\n");
@@ -316,6 +338,15 @@ cmd_help(void)
     printf("  D           - Toggle disassembly/raw hex display\n");
     printf("  b <addr>    - Set breakpoint\n");
     printf("  C           - Clear breakpoint\n");
+#ifdef CONFIG_ENABLE_F_EXTENSION
+    printf("  f           - Show all FP registers\n");
+    printf("  F <freg>    - Show specific FP register (F f0, F f1, etc.)\n");
+    printf("  F <f> <v>   - Set FP register (F f0 0x3f800000 or F f0 1.0)\n");
+    printf("  fc          - Show FCSR register\n");
+    printf("  fc <v>      - Set FCSR register (hex)\n");
+    printf("  frm         - Show current rounding mode\n");
+    printf("  fd <a> [f]  - Dump memory as float (f/d/q, default=f)\n");
+#endif
     printf("  h/?         - This help\n");
     printf("  <Enter>     - Repeat last command\n");
 }
@@ -343,12 +374,6 @@ cmd_set_pc(char *args)
 static void
 cmd_set_register(char *args)
 {
-    const char *reg_names[]
-        = { "zero", "ra", "sp",  "gp",  "tp", "t0", "t1", "t2",
-            "s0",   "s1", "a0",  "a1",  "a2", "a3", "a4", "a5",
-            "a6",   "a7", "s2",  "s3",  "s4", "s5", "s6", "s7",
-            "s8",   "s9", "s10", "s11", "t3", "t4", "t5", "t6" };
-
     uint32_t value;
     int reg_num = -1;
 
@@ -410,6 +435,302 @@ cmd_set_register(char *args)
     printf("x%d (%s) = 0x%08x\n", reg_num, reg_names[reg_num], value);
 }
 
+#ifdef CONFIG_ENABLE_F_EXTENSION
+
+static void
+cmd_fregisters(void)
+{
+    printf("FP REGISTERS (FPR):\n");
+
+    // Single precision
+    printf("  Single-precision (hex / float):\n");
+    for (int i = 0; i < 32; i++)
+    {
+        uint32_t val = fpr_read_s(i);
+        float fval;
+        memcpy(&fval, &val, sizeof(float));
+        printf("  %s=0x%08x (%-12.6g)", freg_names[i], val, (double)fval);
+        if ((i + 1) % 2 == 0) printf("\n");
+    }
+    printf("\n");
+
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    printf("  Double-precision (hex / double):\n");
+    for (int i = 0; i < 32; i++)
+    {
+        uint64_t val = fpr_read_d(i);
+        double dval;
+        memcpy(&dval, &val, sizeof(double));
+        printf("  %s=0x%016llx (%-12.6g)", freg_names[i],
+               (unsigned long long)val, dval);
+        if ((i + 1) % 2 == 0) printf("\n");
+    }
+    printf("\n");
+#endif
+
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    printf("  Quad-precision (hex, low/high):\n");
+    for (int i = 0; i < 32; i++)
+    {
+        float128_t q;
+        fpr_read_q(i, &q);
+        printf("  %s=0x%016llx_%016llx", freg_names[i],
+               (unsigned long long)q.v[1], (unsigned long long)q.v[0]);
+        if ((i + 1) % 2 == 0) printf("\n");
+    }
+    printf("\n");
+#endif
+}
+
+static void
+cmd_fdump(char *args)
+{
+    uint32_t addr;
+    char format = 'f'; // 'f' for float, 'd' for double, 'q' for quad
+
+    char *token = strtok(args, " \t\n");
+    if (!token)
+    {
+        printf("usage: fd <address> [f|d|q]\n");
+        printf("  f - dump as float (default)\n");
+        printf("  d - dump as double\n");
+        printf("  q - dump as quad\n");
+        return;
+    }
+
+    if (sscanf(token, "%x", &addr) != 1)
+    {
+        printf("invalid address: %s\n", token);
+        return;
+    }
+
+    token = strtok(NULL, " \t\n");
+    if (token)
+    {
+        format = tolower(token[0]);
+    }
+
+    switch (format)
+    {
+    case 'f':
+    {
+        uint32_t val = mem_read32_unsigned(addr);
+        float fval;
+        memcpy(&fval, &val, sizeof(float));
+        printf("0x%08x: 0x%08x = %f\n", addr, val, (double)fval);
+        break;
+    }
+#ifdef CONFIG_ENABLE_D_EXTENSION
+    case 'd':
+    {
+        uint64_t val;
+#ifdef CONFIG_SUPPORT_MISALIGN
+        if (unlikely(!is_aligned(addr, 8)))
+        {
+            val = 0;
+            for (int i = 0; i < 8; i++)
+                val |= (uint64_t)mem_read8_unsigned(addr + i) << (8 * i);
+        }
+        else
+#endif
+            val = mem_read64_unsigned(addr);
+        double dval;
+        memcpy(&dval, &val, sizeof(double));
+        printf("0x%08x: 0x%016llx = %g\n", addr, (unsigned long long)val, dval);
+        break;
+    }
+#endif
+#ifdef CONFIG_ENABLE_Q_EXTENSION
+    case 'q':
+    {
+        float128_t q;
+#ifdef CONFIG_SUPPORT_MISALIGN
+        if (unlikely(!is_aligned(addr, 16)))
+        {
+            q.v[0] = 0;
+            q.v[1] = 0;
+            for (int i = 0; i < 8; i++)
+                q.v[0] |= (uint64_t)mem_read8_unsigned(addr + i) << (8 * i);
+            for (int i = 0; i < 8; i++)
+                q.v[1] |= (uint64_t)mem_read8_unsigned(addr + 8 + i) << (8 * i);
+        }
+        else
+#endif
+        {
+            q.v[0] = mem_read64_unsigned(addr);
+            q.v[1] = mem_read64_unsigned(addr + 8);
+        }
+        printf("0x%08x: 0x%016llx_%016llx\n", addr,
+               (unsigned long long)q.v[1], (unsigned long long)q.v[0]);
+        break;
+    }
+#endif
+    default:
+        printf("unknown format: %c (use f, d, or q)\n", format);
+        break;
+    }
+}
+
+static void
+cmd_set_fregister(char *args)
+{
+    char *token = strtok(args, " \t\n");
+    if (!token)
+    {
+        printf("usage: F <freg> [value]\n");
+        printf("  F f0         - show f0 value\n");
+        printf("  F f0 0x3f800000 - set f0 to 1.0 (single precision)\n");
+        printf("  F f0 0x3ff0000000000000 - set f0 to 1.0 (double precision)\n");
+        printf("  F f0 1.0     - set f0 to 1.0\n");
+        return;
+    }
+
+    // Parse register name
+    int reg_num = -1;
+    if (token[0] == 'f' || token[0] == 'F')
+    {
+        int num;
+        if (sscanf(token + 1, "%d", &num) == 1 && num >= 0 && num <= 31)
+        {
+            reg_num = num;
+        }
+    }
+
+    if (reg_num < 0)
+    {
+        // Try matching full name
+        for (int i = 0; i < 32; i++)
+        {
+            if (strcasecmp(token, freg_names[i]) == 0)
+            {
+                reg_num = i;
+                break;
+            }
+        }
+    }
+
+    if (reg_num < 0 || reg_num > 31)
+    {
+        printf("invalid FP register: %s (use f0-f31)\n", token);
+        return;
+    }
+
+    token = strtok(NULL, " \t\n");
+    if (!token)
+    {
+        // Show current value
+        uint32_t val = fpr_read_s(reg_num);
+        float fval;
+        memcpy(&fval, &val, sizeof(float));
+        printf("%s = 0x%08x (%f)\n", freg_names[reg_num], val, (double)fval);
+#ifdef CONFIG_ENABLE_D_EXTENSION
+        uint64_t dval = fpr_read_d(reg_num);
+        double ddval;
+        memcpy(&ddval, &dval, sizeof(double));
+        printf("  as double: 0x%016llx (%g)\n", (unsigned long long)dval, ddval);
+#endif
+        return;
+    }
+
+    // Try parsing as hex first
+    uint64_t value;
+    if (sscanf(token, "%llx", (unsigned long long *)&value) == 1)
+    {
+        // If value fits in 32 bits, write as single precision
+        if (value <= 0xFFFFFFFFULL)
+        {
+            fpr_write_s(reg_num, (uint32_t)value);
+            float fval;
+            memcpy(&fval, &value, sizeof(float));
+            printf("%s set to 0x%08x (%f)\n", freg_names[reg_num],
+                   (uint32_t)value, (double)fval);
+        }
+#ifdef CONFIG_ENABLE_D_EXTENSION
+        else
+        {
+            fpr_write_d(reg_num, value);
+            double dval;
+            memcpy(&dval, &value, sizeof(double));
+            printf("%s set to 0x%016llx (%g)\n", freg_names[reg_num],
+                   (unsigned long long)value, dval);
+        }
+#endif
+        return;
+    }
+
+    // Try parsing as decimal float
+    double dval;
+    if (sscanf(token, "%lf", &dval) == 1)
+    {
+        // Check if it's a float or double value
+        float single = (float)dval;
+        uint32_t single_bits;
+        memcpy(&single_bits, &single, sizeof(float));
+        fpr_write_s(reg_num, single_bits);
+        printf("%s set to %f (0x%08x)\n", freg_names[reg_num],
+               (double)single, single_bits);
+        return;
+    }
+
+    printf("invalid value: %s (use hex or decimal)\n", token);
+}
+
+static void
+cmd_fcsr(void)
+{
+    printf("FCSR = 0x%08x\n", fcsr);
+    printf("  fflags   = 0x%02x (", get_fflags());
+    uint32_t flags = get_fflags();
+    if (flags & NV) printf("NV ");
+    if (flags & DZ) printf("DZ ");
+    if (flags & OF) printf("OF ");
+    if (flags & UF) printf("UF ");
+    if (flags & NX) printf("NX");
+    if (flags == 0) printf("none");
+    printf(")\n");
+    printf("  frm      = 0x%02x (", get_frm());
+    switch (get_frm())
+    {
+    case 0: printf("RNE - Round to Nearest, ties to Even)\n"); break;
+    case 1: printf("RTZ - Round towards Zero\n"); break;
+    case 2: printf("RDN - Round Down (towards -inf)\n"); break;
+    case 3: printf("RUP - Round Up (towards +inf)\n"); break;
+    case 4: printf("RMM - Round to Nearest, ties to Max Magnitude\n"); break;
+    default: printf("INVALID)\n"); break;
+    }
+}
+
+static void
+cmd_set_fcsr(char *args)
+{
+    uint32_t value;
+    if (sscanf(args, "%x", &value) != 1)
+    {
+        printf("usage: fc <value> (hex, e.g., fc 0x1f)\n");
+        return;
+    }
+    set_fcsr(value);
+    printf("FCSR set to 0x%08x\n", fcsr);
+}
+
+static void
+cmd_frm(void)
+{
+    uint32_t frm = get_frm();
+    printf("Current rounding mode: ");
+    switch (frm)
+    {
+    case 0: printf("RNE (Round to Nearest, ties to Even)\n"); break;
+    case 1: printf("RTZ (Round towards Zero)\n"); break;
+    case 2: printf("RDN (Round Down, towards -inf)\n"); break;
+    case 3: printf("RUP (Round Up, towards +inf)\n"); break;
+    case 4: printf("RMM (Round to Nearest, ties to Max Magnitude)\n"); break;
+    default: printf("INVALID (%u)\n", frm); break;
+    }
+}
+
+#endif // CONFIG_ENABLE_F_EXTENSION
+
 void
 tick_debugger(void)
 {
@@ -463,85 +784,132 @@ tick_debugger(void)
             strcpy(last_cmd, line);
         }
 
-        char cmd = *p++;
+        // Extract command and arguments
+        char cmd_buf[16];
         char *args = p;
-
+        int cmd_len = 0;
+        while (*args && !isspace(*args) && cmd_len < 15)
+        {
+            cmd_buf[cmd_len++] = *args++;
+        }
+        cmd_buf[cmd_len] = '\0';
         while (*args && isspace(*args)) args++;
 
-        switch (cmd)
+        // Handle commands
+        if (strcmp(cmd_buf, "s") == 0 || strcmp(cmd_buf, "n") == 0)
         {
-        case 's':
-        case 'n':
             cmd_single_step();
             return;
-
-        case 'c':
+        }
+        else if (strcmp(cmd_buf, "c") == 0)
+        {
             cmd_continue();
             return;
-
-        case 'q':
+        }
+        else if (strcmp(cmd_buf, "q") == 0)
+        {
             cmd_quit();
             return;
-
-        case 'r':
+        }
+        else if (strcmp(cmd_buf, "r") == 0)
+        {
             cmd_registers();
             continue;
-
-        case 'p':
+        }
+        else if (strcmp(cmd_buf, "p") == 0)
+        {
             cmd_set_pc(args);
             continue;
-
-        case 'R':
+        }
+        else if (strcmp(cmd_buf, "R") == 0)
+        {
             cmd_set_register(args);
             continue;
-
-        case 'm':
+        }
+        else if (strcmp(cmd_buf, "m") == 0)
+        {
             cmd_memory(args);
             continue;
-
-        case 'w':
+        }
+        else if (strcmp(cmd_buf, "w") == 0)
+        {
             cmd_write(args);
             continue;
-
-        case 'B':
+        }
+        else if (strcmp(cmd_buf, "B") == 0)
+        {
             cmd_dump_bytes(args);
             continue;
-
-        case 'S':
+        }
+        else if (strcmp(cmd_buf, "S") == 0)
+        {
             cmd_string(args);
             continue;
-
-        case 'd':
+        }
+        else if (strcmp(cmd_buf, "d") == 0)
+        {
             cmd_dump_range(args);
             continue;
-
-        case 'u':
+        }
+        else if (strcmp(cmd_buf, "u") == 0)
+        {
             cmd_disasm(args);
             continue;
-
-        case 'D':
+        }
+        else if (strcmp(cmd_buf, "D") == 0)
+        {
             cmd_toggle_disasm();
             continue;
-
-        case 'b':
+        }
+        else if (strcmp(cmd_buf, "b") == 0)
+        {
             cmd_breakpoint_set(args);
             continue;
-
-        case 'C':
+        }
+        else if (strcmp(cmd_buf, "C") == 0)
+        {
             cmd_breakpoint_clear();
             continue;
-
-        case 'h':
-        case '?':
+        }
+#ifdef CONFIG_ENABLE_F_EXTENSION
+        else if (strcmp(cmd_buf, "f") == 0)
+        {
+            cmd_fregisters();
+            continue;
+        }
+        else if (strcmp(cmd_buf, "F") == 0)
+        {
+            cmd_set_fregister(args);
+            continue;
+        }
+        else if (strcmp(cmd_buf, "fc") == 0)
+        {
+            if (*args)
+                cmd_set_fcsr(args);
+            else
+                cmd_fcsr();
+            continue;
+        }
+        else if (strcmp(cmd_buf, "fd") == 0)
+        {
+            cmd_fdump(args);
+            continue;
+        }
+        else if (strcmp(cmd_buf, "frm") == 0)
+        {
+            cmd_frm();
+            continue;
+        }
+#endif
+        else if (strcmp(cmd_buf, "h") == 0 || strcmp(cmd_buf, "?") == 0)
+        {
             cmd_help();
             continue;
-
-        default:
-            if (cmd != '\n' && !isspace(cmd))
-            {
-                printf("unknown command: %c (type 'h' for help)\n", cmd);
-            }
-            break;
+        }
+        else
+        {
+            printf("unknown command: %s (type 'h' for help)\n", cmd_buf);
+            continue;
         }
     }
 }

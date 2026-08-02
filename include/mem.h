@@ -101,6 +101,20 @@ mem_write32(uint32_t addr, uint32_t val)
     *(uint32_t *)(g_state.main_memory + addr) = val;
 }
 
+static inline uint64_t
+mem_read64_unsigned(uint32_t addr)
+{
+    if (unlikely(addr >= MEM_SIZE - 7)) return 0;
+    return *(uint64_t *)(g_state.main_memory + addr);
+}
+
+static inline void
+mem_write64(uint32_t addr, uint64_t val)
+{
+    if (unlikely(addr >= MEM_SIZE - 7)) return;
+    *(uint64_t *)(g_state.main_memory + addr) = val;
+}
+
 static inline bool
 is_aligned(uint32_t addr, uint32_t size)
 {
