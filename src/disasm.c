@@ -131,24 +131,6 @@ fmt_name(uint32_t fmt)
     }
 }
 
-static const char *
-fcvt_kind_name(uint32_t kind)
-{
-    switch (kind)
-    {
-    case 0:
-        return "w";
-    case 1:
-        return "wu";
-    case 2:
-        return "l";
-    case 3:
-        return "lu";
-    default:
-        return "?";
-    }
-}
-
 char *
 disasm(uint32_t ins)
 {
@@ -335,8 +317,6 @@ disasm(uint32_t ins)
         case 24: // FCVT.* (fp -> int)
         {
             const char *kinds[] = { "w", "wu", "l", "lu" };
-            // rs2 编码了源精度
-            uint32_t sfmt = rs2;
             sprintf(disasm_buf, "fcvt.%s.%s %s, %s, %s", kinds[rs2 & 3],
                     fmt_name(fmt), reg_name(rd), freg_name(rs1), rm_name(rm));
             break;

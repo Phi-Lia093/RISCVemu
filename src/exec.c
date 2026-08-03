@@ -321,10 +321,18 @@ exec(uint32_t ins)
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
         switch (funct3)
         {
-        case 2: insf_flw(imm, rs1, rd); break;
-        case 3: insf_fld(imm, rs1, rd); break;
-        case 4: insf_flq(imm, rs1, rd); break;
-        default: fatal("invalid FP load instruction"); break;
+        case 2:
+            insf_flw(imm, rs1, rd);
+            break;
+        case 3:
+            insf_fld(imm, rs1, rd);
+            break;
+        case 4:
+            insf_flq(imm, rs1, rd);
+            break;
+        default:
+            fatal("invalid FP load instruction");
+            break;
         }
         break;
     }
@@ -336,18 +344,34 @@ exec(uint32_t ins)
         imm = sign_extend_12(imm);
         switch (funct3)
         {
-        case 2: insf_fsw(imm, rs1, rs2); break;
-        case 3: insf_fsd(imm, rs1, rs2); break;
-        case 4: insf_fsq(imm, rs1, rs2); break;
-        default: fatal("invalid FP store instruction"); break;
+        case 2:
+            insf_fsw(imm, rs1, rs2);
+            break;
+        case 3:
+            insf_fsd(imm, rs1, rs2);
+            break;
+        case 4:
+            insf_fsq(imm, rs1, rs2);
+            break;
+        default:
+            fatal("invalid FP store instruction");
+            break;
         }
         break;
     }
     // FMA: fmadd / fmsub / fnmsub / fnmadd
-    case 0b1000011: insf_r_fma(ins, 0); break; // fmadd
-    case 0b1000111: insf_r_fma(ins, 1); break; // fmsub
-    case 0b1001011: insf_r_fma(ins, 2); break; // fnmsub
-    case 0b1001111: insf_r_fma(ins, 3); break; // fnmadd
+    case 0b1000011:
+        insf_r_fma(ins, 0);
+        break; // fmadd
+    case 0b1000111:
+        insf_r_fma(ins, 1);
+        break; // fmsub
+    case 0b1001011:
+        insf_r_fma(ins, 2);
+        break; // fnmsub
+    case 0b1001111:
+        insf_r_fma(ins, 3);
+        break; // fnmadd
     // FP-OP
     case 0b1010011:
         insf_r_fpop(ins);

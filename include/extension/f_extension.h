@@ -24,8 +24,8 @@
 #include <config.h>
 
 #ifdef CONFIG_ENABLE_F_EXTENSION
-#include <stdint.h>
 #include <softfloat.h>
+#include <stdint.h>
 
 extern uint64_t fpr[sizeof(__float128) * 32 / sizeof(uint64_t)]; // max 32*QWORD
 

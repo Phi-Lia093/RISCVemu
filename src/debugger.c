@@ -41,18 +41,16 @@ static char last_cmd[256] = { 0 };
 static int show_disasm = 1; // 1 = show disassembly, 0 = show raw hex
 
 static const char *reg_names[]
-    = { "zero", "ra", "sp",  "gp",  "tp", "t0", "t1", "t2",
-        "s0",   "s1", "a0",  "a1",  "a2", "a3", "a4", "a5",
-        "a6",   "a7", "s2",  "s3",  "s4", "s5", "s6", "s7",
-        "s8",   "s9", "s10", "s11", "t3", "t4", "t5", "t6" };
+    = { "zero", "ra", "sp", "gp", "tp",  "t0",  "t1", "t2", "s0", "s1", "a0",
+        "a1",   "a2", "a3", "a4", "a5",  "a6",  "a7", "s2", "s3", "s4", "s5",
+        "s6",   "s7", "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6" };
 
 #ifdef CONFIG_ENABLE_F_EXTENSION
-static const char *freg_names[] = {
-    "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",
-    "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
-    "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
-    "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31"
-};
+static const char *freg_names[]
+    = { "f0",  "f1",  "f2",  "f3",  "f4",  "f5",  "f6",  "f7",
+        "f8",  "f9",  "f10", "f11", "f12", "f13", "f14", "f15",
+        "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
+        "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31" };
 #endif
 
 static void cmd_set_pc(char *args);
@@ -560,8 +558,8 @@ cmd_fdump(char *args)
             q.v[0] = mem_read64_unsigned(addr);
             q.v[1] = mem_read64_unsigned(addr + 8);
         }
-        printf("0x%08x: 0x%016llx_%016llx\n", addr,
-               (unsigned long long)q.v[1], (unsigned long long)q.v[0]);
+        printf("0x%08x: 0x%016llx_%016llx\n", addr, (unsigned long long)q.v[1],
+               (unsigned long long)q.v[0]);
         break;
     }
 #endif
@@ -580,7 +578,8 @@ cmd_set_fregister(char *args)
         printf("usage: F <freg> [value]\n");
         printf("  F f0         - show f0 value\n");
         printf("  F f0 0x3f800000 - set f0 to 1.0 (single precision)\n");
-        printf("  F f0 0x3ff0000000000000 - set f0 to 1.0 (double precision)\n");
+        printf(
+            "  F f0 0x3ff0000000000000 - set f0 to 1.0 (double precision)\n");
         printf("  F f0 1.0     - set f0 to 1.0\n");
         return;
     }
@@ -627,7 +626,8 @@ cmd_set_fregister(char *args)
         uint64_t dval = fpr_read_d(reg_num);
         double ddval;
         memcpy(&ddval, &dval, sizeof(double));
-        printf("  as double: 0x%016llx (%g)\n", (unsigned long long)dval, ddval);
+        printf("  as double: 0x%016llx (%g)\n", (unsigned long long)dval,
+               ddval);
 #endif
         return;
     }
@@ -667,8 +667,8 @@ cmd_set_fregister(char *args)
         uint32_t single_bits;
         memcpy(&single_bits, &single, sizeof(float));
         fpr_write_s(reg_num, single_bits);
-        printf("%s set to %f (0x%08x)\n", freg_names[reg_num],
-               (double)single, single_bits);
+        printf("%s set to %f (0x%08x)\n", freg_names[reg_num], (double)single,
+               single_bits);
         return;
     }
 
@@ -691,12 +691,24 @@ cmd_fcsr(void)
     printf("  frm      = 0x%02x (", get_frm());
     switch (get_frm())
     {
-    case 0: printf("RNE - Round to Nearest, ties to Even)\n"); break;
-    case 1: printf("RTZ - Round towards Zero\n"); break;
-    case 2: printf("RDN - Round Down (towards -inf)\n"); break;
-    case 3: printf("RUP - Round Up (towards +inf)\n"); break;
-    case 4: printf("RMM - Round to Nearest, ties to Max Magnitude\n"); break;
-    default: printf("INVALID)\n"); break;
+    case 0:
+        printf("RNE - Round to Nearest, ties to Even)\n");
+        break;
+    case 1:
+        printf("RTZ - Round towards Zero\n");
+        break;
+    case 2:
+        printf("RDN - Round Down (towards -inf)\n");
+        break;
+    case 3:
+        printf("RUP - Round Up (towards +inf)\n");
+        break;
+    case 4:
+        printf("RMM - Round to Nearest, ties to Max Magnitude\n");
+        break;
+    default:
+        printf("INVALID)\n");
+        break;
     }
 }
 
@@ -720,12 +732,24 @@ cmd_frm(void)
     printf("Current rounding mode: ");
     switch (frm)
     {
-    case 0: printf("RNE (Round to Nearest, ties to Even)\n"); break;
-    case 1: printf("RTZ (Round towards Zero)\n"); break;
-    case 2: printf("RDN (Round Down, towards -inf)\n"); break;
-    case 3: printf("RUP (Round Up, towards +inf)\n"); break;
-    case 4: printf("RMM (Round to Nearest, ties to Max Magnitude)\n"); break;
-    default: printf("INVALID (%u)\n", frm); break;
+    case 0:
+        printf("RNE (Round to Nearest, ties to Even)\n");
+        break;
+    case 1:
+        printf("RTZ (Round towards Zero)\n");
+        break;
+    case 2:
+        printf("RDN (Round Down, towards -inf)\n");
+        break;
+    case 3:
+        printf("RUP (Round Up, towards +inf)\n");
+        break;
+    case 4:
+        printf("RMM (Round to Nearest, ties to Max Magnitude)\n");
+        break;
+    default:
+        printf("INVALID (%u)\n", frm);
+        break;
     }
 }
 
