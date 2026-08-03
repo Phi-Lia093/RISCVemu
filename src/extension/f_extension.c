@@ -1088,6 +1088,33 @@ insf_fsq(uint32_t imm, uint32_t rs1, uint32_t rs2)
 /* FCVT helpers                  */
 /* ----------------------------- */
 
+/* --------------------------------------------------------------------- */
+/* RISC-V fp -> int conversion.                                          */
+/*                                                                       */
+/* The bundled softfloat library returns non-RISC-V saturation values on */
+/* invalid conversions (e.g. 0x80000000 for a *positive* overflow, and   */
+/* 0xffffffff for a *negative* value converted to unsigned, and a broken */
+/* f64_to_ui32 of +inf / -inf / NaN).  We therefore detect the special   */
+/* cases (NaN / infinity / out-of-range) ourselves and override the      */
+/* returned value with the RISC-V-mandated saturated result, while still */
+/* using softfloat for the (correct) rounding of in-range values.        */
+/*                                                                       */
+/* RISC-V result rules (kind 0=w 1=wu 2=l 3=lu):                         */
+/*   NaN         -> INT_MAX (signed) / UINT_MAX (unsigned), set NV       */
+/*   +inf        -> INT_MAX (signed) / UINT_MAX (unsigned), set NV       */
+/*   -inf        -> INT_MIN (signed) / 0         (unsigned), set NV      */
+/*   + overflow  -> INT_MAX (signed) / UINT_MAX (unsigned), set NV       */
+/*   - overflow  -> INT_MIN (signed) / 0         (unsigned), set NV      */
+/* --------------------------------------------------------------------- */
+
+static uint32_t
+fcvt_int_sat(uint32_t kind, int sign)
+{
+    if (kind == 1 || kind == 3) /* unsigned: wu / lu */
+        return sign ? 0u : 0xFFFFFFFFu;
+    return sign ? 0x80000000u : 0x7FFFFFFFu; /* signed: w / l */
+}
+
 /* fp -> int : kind 0=w 1=wu 2=l 3=lu ; reads frs1 as fmt precision */
 static uint32_t
 fcvt_fp_int(uint32_t fmt, uint32_t kind, uint32_t rs1, uint32_t rm)
@@ -1100,29 +1127,55 @@ fcvt_fp_int(uint32_t fmt, uint32_t kind, uint32_t rs1, uint32_t rm)
     {
     case S:
     {
-        float32_t a = { fpr_read_s(rs1) };
+        uint32_t a = fpr_read_s(rs1);
+        int sign = (a >> 31) & 1;
+        int nan = is_nan_s(a);
+        int inf
+            = ((a & 0x7F800000u) == 0x7F800000u) && ((a & 0x007FFFFFu) == 0);
+        float32_t fa = { a };
+        if (nan || inf)
+        {
+            softfloat_exceptionFlags |= NV;
+            r = fcvt_int_sat(kind, nan ? 0 : sign);
+            break;
+        }
         if (kind == 0)
-            r = (uint32_t)f32_to_i32(a, mode, true);
+            r = (uint32_t)f32_to_i32(fa, mode, true);
         else if (kind == 1)
-            r = (uint32_t)f32_to_ui32(a, mode, true);
+            r = (uint32_t)f32_to_ui32(fa, mode, true);
         else if (kind == 2)
-            r = (uint32_t)f32_to_i64(a, mode, true);
+            r = (uint32_t)f32_to_i64(fa, mode, true);
         else
-            r = (uint32_t)f32_to_ui64(a, mode, true);
+            r = (uint32_t)f32_to_ui64(fa, mode, true);
+        if (softfloat_exceptionFlags & NV) /* finite value out of range */
+            r = fcvt_int_sat(kind, sign);
         break;
     }
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
     {
-        float64_t a = { fpr_read_d(rs1) };
+        uint64_t a = fpr_read_d(rs1);
+        int sign = (a >> 63) & 1;
+        int nan = is_nan_d(a);
+        int inf = ((a & 0x7FF0000000000000ULL) == 0x7FF0000000000000ULL)
+                  && ((a & 0x000FFFFFFFFFFFFFULL) == 0);
+        float64_t fa = { a };
+        if (nan || inf)
+        {
+            softfloat_exceptionFlags |= NV;
+            r = fcvt_int_sat(kind, nan ? 0 : sign);
+            break;
+        }
         if (kind == 0)
-            r = (uint32_t)f64_to_i32(a, mode, true);
+            r = (uint32_t)f64_to_i32(fa, mode, true);
         else if (kind == 1)
-            r = (uint32_t)f64_to_ui32(a, mode, true);
+            r = (uint32_t)f64_to_ui32(fa, mode, true);
         else if (kind == 2)
-            r = (uint32_t)f64_to_i64(a, mode, true);
+            r = (uint32_t)f64_to_i64(fa, mode, true);
         else
-            r = (uint32_t)f64_to_ui64(a, mode, true);
+            r = (uint32_t)f64_to_ui64(fa, mode, true);
+        if (softfloat_exceptionFlags & NV) /* finite value out of range */
+            r = fcvt_int_sat(kind, sign);
         break;
     }
 #endif
@@ -1131,6 +1184,16 @@ fcvt_fp_int(uint32_t fmt, uint32_t kind, uint32_t rs1, uint32_t rm)
     {
         float128_t a;
         fpr_read_q(rs1, &a);
+        int sign = (a.v[1] >> 63) & 1;
+        int nan = is_nan_q(&a);
+        int inf = ((a.v[1] & 0x7FFF000000000000ULL) == 0x7FFF000000000000ULL)
+                  && ((a.v[1] & 0x0000FFFFFFFFFFFFULL) == 0) && (a.v[0] == 0);
+        if (nan || inf)
+        {
+            softfloat_exceptionFlags |= NV;
+            r = fcvt_int_sat(kind, nan ? 0 : sign);
+            break;
+        }
         if (kind == 0)
             r = (uint32_t)f128M_to_i32(&a, mode, true);
         else if (kind == 1)
@@ -1139,6 +1202,8 @@ fcvt_fp_int(uint32_t fmt, uint32_t kind, uint32_t rs1, uint32_t rm)
             r = (uint32_t)f128M_to_i64(&a, mode, true);
         else
             r = (uint32_t)f128M_to_ui64(&a, mode, true);
+        if (softfloat_exceptionFlags & NV) /* finite value out of range */
+            r = fcvt_int_sat(kind, sign);
         break;
     }
 #endif
@@ -1225,6 +1290,7 @@ fcvt_fp_fp(uint32_t dfmt, uint32_t sfmt, uint32_t rs1, uint32_t rm, uint32_t rd)
             float64_t a = { fpr_read_d(rs1) };
             sf_begin(rm);
             float32_t r = f64_to_f32(a);
+            if (is_nan_s(r.v)) r.v = (r.v & 0x80000000u) | 0x7FC00000u;
             sf_end();
             fpr_write_s(rd, r.v);
             return;
@@ -1237,6 +1303,7 @@ fcvt_fp_fp(uint32_t dfmt, uint32_t sfmt, uint32_t rs1, uint32_t rm, uint32_t rd)
             fpr_read_q(rs1, &a);
             sf_begin(rm);
             float32_t r = f128M_to_f32(&a);
+            if (is_nan_s(r.v)) r.v = (r.v & 0x80000000u) | 0x7FC00000u;
             sf_end();
             fpr_write_s(rd, r.v);
             return;
@@ -1252,6 +1319,8 @@ fcvt_fp_fp(uint32_t dfmt, uint32_t sfmt, uint32_t rs1, uint32_t rm, uint32_t rd)
             float32_t a = { fpr_read_s(rs1) };
             sf_begin(rm);
             float64_t r = f32_to_f64(a);
+            if (is_nan_d(r.v))
+                r.v = (r.v & 0x8000000000000000ULL) | 0x7FF8000000000000ULL;
             sf_end();
             fpr_write_d(rd, r.v);
             return;
@@ -1263,6 +1332,8 @@ fcvt_fp_fp(uint32_t dfmt, uint32_t sfmt, uint32_t rs1, uint32_t rm, uint32_t rd)
             fpr_read_q(rs1, &a);
             sf_begin(rm);
             float64_t r = f128M_to_f64(&a);
+            if (is_nan_d(r.v))
+                r.v = (r.v & 0x8000000000000000ULL) | 0x7FF8000000000000ULL;
             sf_end();
             fpr_write_d(rd, r.v);
             return;
