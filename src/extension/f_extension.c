@@ -203,20 +203,24 @@ static inline int
 is_nan_q(const float128_t *x)
 {
     uint64_t hi = x->v[1];
-    if (((hi >> 48) & 0x7FFF) != 0x7FFF) return 0;
-    if (hi & 0x0000FFFFFFFFFFFFULL) return 1;
-    return x->v[0] != 0;
+    uint64_t exp = (hi >> 48) & 0x7FFF;
+    if (exp != 0x7FFF) return 0;
+    uint64_t mant_hi = hi & 0x0000FFFFFFFFFFFFULL;
+    uint64_t mant_lo = x->v[0];
+    return (mant_hi != 0) || (mant_lo != 0);
 }
 
 static inline int
 is_signaling_nan_q(const float128_t *p)
 {
-    uint64_t high = p->v[0];
-    uint64_t low = p->v[1];
-
-    if ((high & 0x7FFF000000000000ULL) != 0x7FFF000000000000ULL) return 0;
-    if (!((high & 0x0000FFFFFFFFFFFFULL) || low)) return 0;
-    return !(high & 0x0000800000000000ULL);
+    uint64_t hi = p->v[1];
+    uint64_t lo = p->v[0];
+    uint64_t exp = (hi >> 48) & 0x7FFF;
+    if (exp != 0x7FFF) return 0;
+    uint64_t mant_hi = hi & 0x0000FFFFFFFFFFFFULL;
+    uint64_t mant_lo = lo;
+    if ((mant_hi == 0) && (mant_lo == 0)) return 0;
+    return !(mant_hi & (1ULL << 47));
 }
 
 static uint32_t
@@ -283,72 +287,153 @@ fclass_q(const float128_t *x)
     return sign ? (1u << 1) : (1u << 6);
 }
 
-/* fmin/fmax implement the RISC-V behaviour (quiet NaN propagation and
- * signed-zero rules) which differs from IEEE minNum/maxNum. */
 static uint32_t
 rv_fmin_s(uint32_t a, uint32_t b)
 {
-    int an = is_nan_s(a), bn = is_nan_s(b);
-    if (an && bn) return 0x7FC00000u;
-    if (an) return b;
-    if (bn) return a;
+    int a_snan = is_signaling_nan_s(a);
+    int b_snan = is_signaling_nan_s(b);
+    int a_qnan = is_nan_s(a) && !a_snan;
+    int b_qnan = is_nan_s(b) && !b_snan;
+    if (a_snan || b_snan)
+    {
+        fcsr |= NV;
+    }
+    if ((a_snan || a_qnan) && (b_snan || b_qnan))
+    {
+        return RISCV_CANONICAL_NAN_S;
+    }
+    if (a_snan || a_qnan)
+    {
+        return b;
+    }
+    if (b_snan || b_qnan)
+    {
+        return a;
+    }
     float32_t fa = { a }, fb = { b };
-    if (f32_eq(fa, fb)) return ((a >> 31) & 1) ? a : b; /* min(+0,-0) = -0 */
+    if (f32_eq(fa, fb))
+    {
+        return ((a >> 31) & 1) ? a : b;
+    }
     return f32_lt(fa, fb) ? a : b;
 }
 
 static uint32_t
 rv_fmax_s(uint32_t a, uint32_t b)
 {
-    int an = is_nan_s(a), bn = is_nan_s(b);
-    if (an && bn) return 0x7FC00000u;
-    if (an) return b;
-    if (bn) return a;
+    int a_snan = is_signaling_nan_s(a);
+    int b_snan = is_signaling_nan_s(b);
+    int a_qnan = is_nan_s(a) && !a_snan;
+    int b_qnan = is_nan_s(b) && !b_snan;
+    if (a_snan || b_snan)
+    {
+        fcsr |= NV;
+    }
+    if ((a_snan || a_qnan) && (b_snan || b_qnan))
+    {
+        return RISCV_CANONICAL_NAN_S;
+    }
+    if (a_snan || a_qnan)
+    {
+        return b;
+    }
+    if (b_snan || b_qnan)
+    {
+        return a;
+    }
     float32_t fa = { a }, fb = { b };
-    if (f32_eq(fa, fb)) return ((a >> 31) & 1) ? b : a; /* max(+0,-0) = +0 */
+    if (f32_eq(fa, fb))
+    {
+        return ((a >> 31) & 1) ? b : a;
+    }
     return f32_lt(fa, fb) ? b : a;
 }
 
 static uint64_t
 rv_fmin_d(uint64_t a, uint64_t b)
 {
-    int an = is_nan_d(a), bn = is_nan_d(b);
-    if (an && bn) return 0x7FF8000000000000ULL;
-    if (an) return b;
-    if (bn) return a;
+    int a_snan = is_signaling_nan_d(a);
+    int b_snan = is_signaling_nan_d(b);
+    int a_qnan = is_nan_d(a) && !a_snan;
+    int b_qnan = is_nan_d(b) && !b_snan;
+    if (a_snan || b_snan)
+    {
+        fcsr |= NV;
+    }
+    if ((a_snan || a_qnan) && (b_snan || b_qnan))
+    {
+        return RISCV_CANONICAL_NAN_D;
+    }
+    if (a_snan || a_qnan)
+    {
+        return b;
+    }
+    if (b_snan || b_qnan)
+    {
+        return a;
+    }
     float64_t fa = { a }, fb = { b };
-    if (f64_eq(fa, fb)) return ((a >> 63) & 1) ? a : b;
+    if (f64_eq(fa, fb))
+    {
+        return ((a >> 63) & 1) ? a : b;
+    }
     return f64_lt(fa, fb) ? a : b;
 }
 
 static uint64_t
 rv_fmax_d(uint64_t a, uint64_t b)
 {
-    int an = is_nan_d(a), bn = is_nan_d(b);
-    if (an && bn) return 0x7FF8000000000000ULL;
-    if (an) return b;
-    if (bn) return a;
+    int a_snan = is_signaling_nan_d(a);
+    int b_snan = is_signaling_nan_d(b);
+    int a_qnan = is_nan_d(a) && !a_snan;
+    int b_qnan = is_nan_d(b) && !b_snan;
+    if (a_snan || b_snan)
+    {
+        fcsr |= NV;
+    }
+    if ((a_snan || a_qnan) && (b_snan || b_qnan))
+    {
+        return RISCV_CANONICAL_NAN_D;
+    }
+    if (a_snan || a_qnan)
+    {
+        return b;
+    }
+    if (b_snan || b_qnan)
+    {
+        return a;
+    }
     float64_t fa = { a }, fb = { b };
-    if (f64_eq(fa, fb)) return ((a >> 63) & 1) ? b : a;
+    if (f64_eq(fa, fb))
+    {
+        return ((a >> 63) & 1) ? b : a;
+    }
     return f64_lt(fa, fb) ? b : a;
 }
 
 static void
 rv_fmin_q(const float128_t *a, const float128_t *b, float128_t *r)
 {
-    int an = is_nan_q(a), bn = is_nan_q(b);
-    if (an && bn)
+    int a_snan = is_signaling_nan_q(a);
+    int b_snan = is_signaling_nan_q(b);
+    int a_qnan = is_nan_q(a) && !a_snan;
+    int b_qnan = is_nan_q(b) && !b_snan;
+    if (a_snan || b_snan)
     {
-        r->v[0] = 0;
-        r->v[1] = 0x7FFF800000000000ULL;
+        fcsr |= NV;
+    }
+    if ((a_snan || a_qnan) && (b_snan || b_qnan))
+    {
+        r->v[0] = RISCV_CANONICAL_NAN_Q_LO;
+        r->v[1] = RISCV_CANONICAL_NAN_Q_HI;
         return;
     }
-    if (an)
+    if (a_snan || a_qnan)
     {
         *r = *b;
         return;
     }
-    if (bn)
+    if (b_snan || b_qnan)
     {
         *r = *a;
         return;
@@ -364,19 +449,26 @@ rv_fmin_q(const float128_t *a, const float128_t *b, float128_t *r)
 static void
 rv_fmax_q(const float128_t *a, const float128_t *b, float128_t *r)
 {
-    int an = is_nan_q(a), bn = is_nan_q(b);
-    if (an && bn)
+    int a_snan = is_signaling_nan_q(a);
+    int b_snan = is_signaling_nan_q(b);
+    int a_qnan = is_nan_q(a) && !a_snan;
+    int b_qnan = is_nan_q(b) && !b_snan;
+    if (a_snan || b_snan)
     {
-        r->v[0] = 0;
-        r->v[1] = 0x7FFF800000000000ULL;
+        fcsr |= NV;
+    }
+    if ((a_snan || a_qnan) && (b_snan || b_qnan))
+    {
+        r->v[0] = RISCV_CANONICAL_NAN_Q_LO;
+        r->v[1] = RISCV_CANONICAL_NAN_Q_HI;
         return;
     }
-    if (an)
+    if (a_snan || a_qnan)
     {
         *r = *b;
         return;
     }
-    if (bn)
+    if (b_snan || b_qnan)
     {
         *r = *a;
         return;
