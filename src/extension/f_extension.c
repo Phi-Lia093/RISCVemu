@@ -178,10 +178,25 @@ is_nan_s(uint32_t x)
 }
 
 static inline int
+is_signaling_nan_s(uint32_t x)
+{
+    return ((x & 0x7F800000u) == 0x7F800000u) && (x & 0x007FFFFFu)
+           && !(x & 0x00400000u);
+}
+
+static inline int
 is_nan_d(uint64_t x)
 {
     return ((x & 0x7FF0000000000000ULL) == 0x7FF0000000000000ULL)
            && (x & 0x000FFFFFFFFFFFFFULL) != 0;
+}
+
+static inline int
+is_signaling_nan_d(uint64_t x)
+{
+    return ((x & 0x7FF0000000000000ULL) == 0x7FF0000000000000ULL)
+           && (x & 0x000FFFFFFFFFFFFFULL)
+           && !(x & 0x0008000000000000ULL); // bit 51
 }
 
 static inline int
@@ -191,6 +206,17 @@ is_nan_q(const float128_t *x)
     if (((hi >> 48) & 0x7FFF) != 0x7FFF) return 0;
     if (hi & 0x0000FFFFFFFFFFFFULL) return 1;
     return x->v[0] != 0;
+}
+
+static inline int
+is_signaling_nan_q(const float128_t *p)
+{
+    uint64_t high = p->v[0];
+    uint64_t low = p->v[1];
+
+    if ((high & 0x7FFF000000000000ULL) != 0x7FFF000000000000ULL) return 0;
+    if (!((high & 0x0000FFFFFFFFFFFFULL) || low)) return 0;
+    return !(high & 0x0000800000000000ULL);
 }
 
 static uint32_t
@@ -491,24 +517,37 @@ static void
 s_fcmp(uint32_t op, uint32_t rs2, uint32_t rs1, uint32_t rd)
 {
     float32_t a = { fpr_read_s(rs1) }, b = { fpr_read_s(rs2) };
-    uint32_t r;
-    if (is_nan_s(a.v) || is_nan_s(b.v))
+    uint32_t r = 0;
+
+    bool a_is_nan = is_nan_s(a.v);
+    bool b_is_nan = is_nan_s(b.v);
+    bool a_is_snan = is_signaling_nan_s(a.v);
+    bool b_is_snan = is_signaling_nan_s(b.v);
+
+    if (a_is_nan || b_is_nan)
     {
-        fcsr |= NV;
+        if (op == 2)
+        {
+            if (a_is_snan || b_is_snan) fcsr |= NV;
+        }
+        else if (op == 0 || op == 1)
+        {
+            fcsr |= NV;
+        }
         r = 0;
-    }
-    else if (op == 0)
-    {
-        r = f32_eq(a, b) ? 1 : 0;
-    }
-    else if (op == 1)
-    {
-        r = f32_lt(a, b) ? 1 : 0;
     }
     else
     {
-        r = f32_le(a, b) ? 1 : 0;
+        if (op == 2)
+            r = f32_eq(a, b) ? 1 : 0;
+        else if (op == 1)
+            r = f32_lt(a, b) ? 1 : 0;
+        else if (op == 0)
+            r = f32_le(a, b) ? 1 : 0;
+        else
+            r = 0;
     }
+
     reg_write(rd, r);
 }
 
@@ -629,24 +668,36 @@ static void
 d_fcmp(uint32_t op, uint32_t rs2, uint32_t rs1, uint32_t rd)
 {
     float64_t a = { fpr_read_d(rs1) }, b = { fpr_read_d(rs2) };
-    uint32_t r;
-    if (is_nan_d(a.v) || is_nan_d(b.v))
+    uint32_t r = 0;
+
+    bool a_is_nan = is_nan_d(a.v);
+    bool b_is_nan = is_nan_d(b.v);
+    bool a_is_snan = is_signaling_nan_d(a.v);
+    bool b_is_snan = is_signaling_nan_d(b.v);
+    if (a_is_nan || b_is_nan)
     {
-        fcsr |= NV;
+        if (op == 2)
+        {
+            if (a_is_snan || b_is_snan) fcsr |= NV;
+        }
+        else if (op == 0 || op == 1)
+        {
+            fcsr |= NV;
+        }
         r = 0;
-    }
-    else if (op == 0)
-    {
-        r = f64_eq(a, b) ? 1 : 0;
-    }
-    else if (op == 1)
-    {
-        r = f64_lt(a, b) ? 1 : 0;
     }
     else
     {
-        r = f64_le(a, b) ? 1 : 0;
+        if (op == 2)
+            r = f64_eq(a, b) ? 1 : 0;
+        else if (op == 1)
+            r = f64_lt(a, b) ? 1 : 0;
+        else if (op == 0)
+            r = f64_le(a, b) ? 1 : 0;
+        else
+            r = 0;
     }
+
     reg_write(rd, r);
 }
 
@@ -756,24 +807,37 @@ q_fcmp(uint32_t op, uint32_t rs2, uint32_t rs1, uint32_t rd)
     float128_t a, b;
     fpr_read_q(rs1, &a);
     fpr_read_q(rs2, &b);
-    uint32_t r;
-    if (is_nan_q(&a) || is_nan_q(&b))
+    uint32_t r = 0;
+
+    bool a_is_nan = is_nan_q(&a);
+    bool b_is_nan = is_nan_q(&b);
+    bool a_is_snan = is_signaling_nan_q(&a);
+    bool b_is_snan = is_signaling_nan_q(&b);
+
+    if (a_is_nan || b_is_nan)
     {
-        fcsr |= NV;
+        if (op == 2)
+        {
+            if (a_is_snan || b_is_snan) fcsr |= NV;
+        }
+        else if (op == 0 || op == 1)
+        {
+            fcsr |= NV;
+        }
         r = 0;
-    }
-    else if (op == 0)
-    {
-        r = f128M_eq(&a, &b) ? 1 : 0;
-    }
-    else if (op == 1)
-    {
-        r = f128M_lt(&a, &b) ? 1 : 0;
     }
     else
     {
-        r = f128M_le_quiet(&a, &b) ? 1 : 0;
+        if (op == 2)
+            r = f128M_eq(&a, &b) ? 1 : 0;
+        else if (op == 1)
+            r = f128M_lt(&a, &b) ? 1 : 0;
+        else if (op == 0)
+            r = f128M_le(&a, &b) ? 1 : 0;
+        else
+            r = 0;
     }
+
     reg_write(rd, r);
 }
 
