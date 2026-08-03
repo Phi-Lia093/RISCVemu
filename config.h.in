@@ -34,6 +34,7 @@
 #cmakedefine CONFIG_ENABLE_F_EXTENSION
 #cmakedefine CONFIG_ENABLE_D_EXTENSION
 #cmakedefine CONFIG_ENABLE_Q_EXTENSION
+#cmakedefine CONFIG_ENABLE_ZFH_EXTENSION
 
 
 /* Privilege Extensions */

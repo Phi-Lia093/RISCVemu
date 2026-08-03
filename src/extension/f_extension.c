@@ -30,6 +30,7 @@
 #include <mem.h>
 #include <softfloat.h>
 
+#define RISCV_CANONICAL_NAN_H 0x7E00u
 #define RISCV_CANONICAL_NAN_S 0x7FC00000u
 #define RISCV_CANONICAL_NAN_D 0x7FF8000000000000ULL
 #define RISCV_CANONICAL_NAN_Q_LO 0x0000000000000000ULL
@@ -139,6 +140,12 @@ fpr_read_d(uint32_t r)
     return fpr[2 * r];
 }
 
+uint16_t
+fpr_read_h(uint32_t r)
+{
+    return (uint16_t)fpr[2 * r];
+}
+
 void
 fpr_read_q(uint32_t r, float128_t *out)
 {
@@ -157,6 +164,13 @@ void
 fpr_write_d(uint32_t r, uint64_t v)
 {
     fpr[2 * r] = v;
+    fpr[2 * r + 1] = 0xFFFFFFFFFFFFFFFFULL;
+}
+
+void
+fpr_write_h(uint32_t r, uint16_t v)
+{
+    fpr[2 * r] = 0xFFFFFFFFFFFF0000ULL | (uint64_t)v;
     fpr[2 * r + 1] = 0xFFFFFFFFFFFFFFFFULL;
 }
 
@@ -197,6 +211,19 @@ is_signaling_nan_d(uint64_t x)
     return ((x & 0x7FF0000000000000ULL) == 0x7FF0000000000000ULL)
            && (x & 0x000FFFFFFFFFFFFFULL)
            && !(x & 0x0008000000000000ULL); // bit 51
+}
+
+static inline int
+is_nan_h(uint16_t x)
+{
+    return ((x & 0x7C00u) == 0x7C00u) && (x & 0x03FFu) != 0;
+}
+
+static inline int
+is_signaling_nan_h(uint16_t x)
+{
+    return ((x & 0x7C00u) == 0x7C00u) && (x & 0x03FFu) != 0
+           && !(x & 0x0200u); // bit 9
 }
 
 static inline int
@@ -264,6 +291,29 @@ fclass_d(uint64_t x)
     }
     return sign ? (1u << 1) : (1u << 6);
 }
+
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+static uint32_t
+fclass_h(uint16_t x)
+{
+    uint32_t sign = (x >> 15) & 1;
+    uint32_t exp = (x >> 10) & 0x1F;
+    uint32_t mant = x & 0x3FFu;
+
+    if (exp == 0x1F)
+    {
+        if (mant == 0) return sign ? (1u << 0) : (1u << 7); /* +/- inf */
+        if (mant & 0x200u) return (1u << 9);                /* qNaN */
+        return (1u << 8);                                   /* sNaN */
+    }
+    if (exp == 0)
+    {
+        if (mant == 0) return sign ? (1u << 3) : (1u << 4); /* +/- 0 */
+        return sign ? (1u << 2) : (1u << 5);                /* subnormal */
+    }
+    return sign ? (1u << 1) : (1u << 6); /* normal */
+}
+#endif // CONFIG_ENABLE_ZFH_EXTENSION
 
 static uint32_t
 fclass_q(const float128_t *x)
@@ -411,6 +461,71 @@ rv_fmax_d(uint64_t a, uint64_t b)
     return f64_lt(fa, fb) ? b : a;
 }
 
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+
+static uint16_t
+rv_fmin_h(uint16_t a, uint16_t b)
+{
+    int a_snan = is_signaling_nan_h(a);
+    int b_snan = is_signaling_nan_h(b);
+    int a_qnan = is_nan_h(a) && !a_snan;
+    int b_qnan = is_nan_h(b) && !b_snan;
+    if (a_snan || b_snan)
+    {
+        fcsr |= NV;
+    }
+    if ((a_snan || a_qnan) && (b_snan || b_qnan))
+    {
+        return RISCV_CANONICAL_NAN_H;
+    }
+    if (a_snan || a_qnan)
+    {
+        return b;
+    }
+    if (b_snan || b_qnan)
+    {
+        return a;
+    }
+    float16_t fa = { a }, fb = { b };
+    if (f16_eq(fa, fb))
+    {
+        return ((a >> 15) & 1) ? a : b;
+    }
+    return f16_lt(fa, fb) ? a : b;
+}
+
+static uint16_t
+rv_fmax_h(uint16_t a, uint16_t b)
+{
+    int a_snan = is_signaling_nan_h(a);
+    int b_snan = is_signaling_nan_h(b);
+    int a_qnan = is_nan_h(a) && !a_snan;
+    int b_qnan = is_nan_h(b) && !b_snan;
+    if (a_snan || b_snan)
+    {
+        fcsr |= NV;
+    }
+    if ((a_snan || a_qnan) && (b_snan || b_qnan))
+    {
+        return RISCV_CANONICAL_NAN_H;
+    }
+    if (a_snan || a_qnan)
+    {
+        return b;
+    }
+    if (b_snan || b_qnan)
+    {
+        return a;
+    }
+    float16_t fa = { a }, fb = { b };
+    if (f16_eq(fa, fb))
+    {
+        return ((a >> 15) & 1) ? b : a;
+    }
+    return f16_lt(fa, fb) ? b : a;
+}
+#endif // CONFIG_ENABLE_ZFH_EXTENSION
+
 static void
 rv_fmin_q(const float128_t *a, const float128_t *b, float128_t *r)
 {
@@ -496,6 +611,13 @@ static inline uint64_t
 normalize_nan_d(uint64_t x)
 {
     if (is_nan_d(x)) return RISCV_CANONICAL_NAN_D;
+    return x;
+}
+
+static inline uint16_t
+normalize_nan_h(uint16_t x)
+{
+    if (is_nan_h(x)) return RISCV_CANONICAL_NAN_H;
     return x;
 }
 
@@ -659,7 +781,156 @@ s_fma(uint32_t subop, uint32_t rs3, uint32_t rs2, uint32_t rs1, uint32_t rm,
 }
 
 /* ---------------------------- */
-/* Double precision (D)         */
+/* Half precision (Zfh)         */
+/* ---------------------------- */
+
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+static void
+h_add(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float16_t a = { fpr_read_h(rs1) }, b = { fpr_read_h(rs2) };
+    sf_begin(rm);
+    float16_t r = f16_add(a, b);
+    sf_end();
+    r.v = normalize_nan_h(r.v);
+    fpr_write_h(rd, r.v);
+}
+
+static void
+h_sub(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float16_t a = { fpr_read_h(rs1) }, b = { fpr_read_h(rs2) };
+    sf_begin(rm);
+    float16_t r = f16_sub(a, b);
+    sf_end();
+    r.v = normalize_nan_h(r.v);
+    fpr_write_h(rd, r.v);
+}
+
+static void
+h_mul(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float16_t a = { fpr_read_h(rs1) }, b = { fpr_read_h(rs2) };
+    sf_begin(rm);
+    float16_t r = f16_mul(a, b);
+    sf_end();
+    r.v = normalize_nan_h(r.v);
+    fpr_write_h(rd, r.v);
+}
+
+static void
+h_div(uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float16_t a = { fpr_read_h(rs1) }, b = { fpr_read_h(rs2) };
+    sf_begin(rm);
+    float16_t r = f16_div(a, b);
+    sf_end();
+    r.v = normalize_nan_h(r.v);
+    fpr_write_h(rd, r.v);
+}
+
+static void
+h_sqrt(uint32_t rs1, uint32_t rm, uint32_t rd)
+{
+    float16_t a = { fpr_read_h(rs1) };
+    sf_begin(rm);
+    float16_t r = f16_sqrt(a);
+    sf_end();
+    r.v = normalize_nan_h(r.v);
+    fpr_write_h(rd, r.v);
+}
+
+static void
+h_fsgnj(uint32_t rs2, uint32_t rs1, uint32_t op, uint32_t rd)
+{
+    uint16_t a = fpr_read_h(rs1), b = fpr_read_h(rs2), r;
+    switch (op)
+    {
+    case 0:
+        r = (a & 0x7FFFu) | (b & 0x8000u);
+        break;
+    case 1:
+        r = (a & 0x7FFFu) | ((b ^ 0x8000u) & 0x8000u);
+        break;
+    default:
+        r = (a & 0x7FFFu) | ((a ^ b) & 0x8000u);
+        break;
+    }
+    fpr_write_h(rd, r);
+}
+
+static void
+h_fmin(uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    fpr_write_h(rd, rv_fmin_h(fpr_read_h(rs1), fpr_read_h(rs2)));
+}
+
+static void
+h_fmax(uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    fpr_write_h(rd, rv_fmax_h(fpr_read_h(rs1), fpr_read_h(rs2)));
+}
+
+static void
+h_fclass(uint32_t rs1, uint32_t rd)
+{
+    reg_write(rd, fclass_h(fpr_read_h(rs1)));
+}
+
+static void
+h_fcmp(uint32_t op, uint32_t rs2, uint32_t rs1, uint32_t rd)
+{
+    float16_t a = { fpr_read_h(rs1) }, b = { fpr_read_h(rs2) };
+    uint32_t r = 0;
+
+    bool a_is_nan = is_nan_h(a.v);
+    bool b_is_nan = is_nan_h(b.v);
+    bool a_is_snan = is_signaling_nan_h(a.v);
+    bool b_is_snan = is_signaling_nan_h(b.v);
+
+    if (a_is_nan || b_is_nan)
+    {
+        if (op == 2)
+        {
+            if (a_is_snan || b_is_snan) fcsr |= NV;
+        }
+        else if (op == 0 || op == 1)
+        {
+            fcsr |= NV;
+        }
+        r = 0;
+    }
+    else
+    {
+        if (op == 2)
+            r = f16_eq(a, b) ? 1 : 0;
+        else if (op == 1)
+            r = f16_lt(a, b) ? 1 : 0;
+        else if (op == 0)
+            r = f16_le(a, b) ? 1 : 0;
+        else
+            r = 0;
+    }
+
+    reg_write(rd, r);
+}
+
+static void
+h_fma(uint32_t subop, uint32_t rs3, uint32_t rs2, uint32_t rs1, uint32_t rm,
+      uint32_t rd)
+{
+    float16_t a = { fpr_read_h(rs1) }, b = { fpr_read_h(rs2) },
+              c = { fpr_read_h(rs3) };
+    if (subop & 1) c.v ^= 0x8000u;
+    if (subop & 2) a.v ^= 0x8000u;
+    sf_begin(rm);
+    float16_t r = f16_mulAdd(a, b, c);
+    sf_end();
+    r.v = normalize_nan_h(r.v);
+    fpr_write_h(rd, r.v);
+}
+#endif // CONFIG_ENABLE_ZFH_EXTENSION
+
 /* ---------------------------- */
 
 #ifdef CONFIG_ENABLE_D_EXTENSION
@@ -1039,6 +1310,33 @@ insf_fsd(uint32_t imm, uint32_t rs1, uint32_t rs2)
 }
 
 void
+insf_flh(uint32_t imm, uint32_t rs1, uint32_t rd)
+{
+    uint32_t addr = reg_read(rs1) + imm;
+    uint16_t val;
+#ifdef CONFIG_SUPPORT_MISALIGN
+    if (unlikely(!is_aligned(addr, 2)))
+        val = misaligned_load16(addr);
+    else
+#endif
+        val = mem_read16_unsigned(addr);
+    fpr_write_h(rd, val);
+}
+
+void
+insf_fsh(uint32_t imm, uint32_t rs1, uint32_t rs2)
+{
+    uint32_t addr = reg_read(rs1) + imm;
+    uint16_t val = fpr_read_h(rs2);
+#ifdef CONFIG_SUPPORT_MISALIGN
+    if (unlikely(!is_aligned(addr, 2)))
+        misaligned_store16(addr, val);
+    else
+#endif
+        mem_write16(addr, val);
+}
+
+void
 insf_flq(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
@@ -1151,6 +1449,33 @@ fcvt_fp_int(uint32_t fmt, uint32_t kind, uint32_t rs1, uint32_t rm)
             r = fcvt_int_sat(kind, sign);
         break;
     }
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+    {
+        uint16_t a = fpr_read_h(rs1);
+        int sign = (a >> 15) & 1;
+        int nan = is_nan_h(a);
+        int inf = ((a & 0x7C00u) == 0x7C00u) && ((a & 0x03FFu) == 0);
+        float16_t fa = { a };
+        if (nan || inf)
+        {
+            softfloat_exceptionFlags |= NV;
+            r = fcvt_int_sat(kind, nan ? 0 : sign);
+            break;
+        }
+        if (kind == 0)
+            r = (uint32_t)f16_to_i32(fa, mode, true);
+        else if (kind == 1)
+            r = (uint32_t)f16_to_ui32(fa, mode, true);
+        else if (kind == 2)
+            r = (uint32_t)f16_to_i64(fa, mode, true);
+        else
+            r = (uint32_t)f16_to_ui64(fa, mode, true);
+        if (softfloat_exceptionFlags & NV) /* finite value out of range */
+            r = fcvt_int_sat(kind, sign);
+        break;
+    }
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
     {
@@ -1238,6 +1563,23 @@ fcvt_int_fp(uint32_t fmt, uint32_t kind, uint32_t rs1, uint32_t rm, uint32_t rd)
         fpr_write_s(rd, r.v);
         return;
     }
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+    {
+        float16_t r;
+        if (kind == 0)
+            r = i32_to_f16(v);
+        else if (kind == 1)
+            r = ui32_to_f16(uv);
+        else if (kind == 2)
+            r = i64_to_f16((int64_t)v);
+        else
+            r = ui64_to_f16((uint64_t)uv);
+        sf_end();
+        fpr_write_h(rd, r.v);
+        return;
+    }
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
     {
@@ -1284,6 +1626,18 @@ fcvt_fp_fp(uint32_t dfmt, uint32_t sfmt, uint32_t rs1, uint32_t rm, uint32_t rd)
 {
     if (dfmt == S)
     {
+#if defined(CONFIG_ENABLE_ZFH_EXTENSION)
+        if (sfmt == H)
+        {
+            float16_t a = { fpr_read_h(rs1) };
+            sf_begin(rm);
+            float32_t r = f16_to_f32(a);
+            if (is_nan_s(r.v)) r.v = (r.v & 0x80000000u) | 0x7FC00000u;
+            sf_end();
+            fpr_write_s(rd, r.v);
+            return;
+        }
+#endif
 #if defined(CONFIG_ENABLE_D_EXTENSION)
         if (sfmt == D)
         {
@@ -1340,6 +1694,19 @@ fcvt_fp_fp(uint32_t dfmt, uint32_t sfmt, uint32_t rs1, uint32_t rm, uint32_t rd)
         }
 #endif
 #endif
+#if defined(CONFIG_ENABLE_ZFH_EXTENSION)
+        if (sfmt == H)
+        {
+            float16_t a = { fpr_read_h(rs1) };
+            sf_begin(rm);
+            float64_t r = f16_to_f64(a);
+            if (is_nan_d(r.v))
+                r.v = (r.v & 0x8000000000000000ULL) | 0x7FF8000000000000ULL;
+            sf_end();
+            fpr_write_d(rd, r.v);
+            return;
+        }
+#endif
         fatal("fcvt D<-%u: unsupported", sfmt);
     }
     else if (dfmt == Q)
@@ -1363,8 +1730,59 @@ fcvt_fp_fp(uint32_t dfmt, uint32_t sfmt, uint32_t rs1, uint32_t rm, uint32_t rd)
             return;
         }
 #endif
+#if defined(CONFIG_ENABLE_ZFH_EXTENSION)
+        if (sfmt == H)
+        {
+            float16_t a = { fpr_read_h(rs1) };
+            float128_t r;
+            f16_to_f128M(a, &r);
+            fpr_write_q(rd, &r);
+            return;
+        }
+#endif
 #endif
         fatal("fcvt Q<-%u: unsupported", sfmt);
+    }
+    else if (dfmt == H)
+    {
+#if defined(CONFIG_ENABLE_ZFH_EXTENSION)
+        if (sfmt == S)
+        {
+            float32_t a = { fpr_read_s(rs1) };
+            sf_begin(rm);
+            float16_t r = f32_to_f16(a);
+            if (is_nan_h(r.v)) r.v = (r.v & 0x8000u) | 0x7E00u;
+            sf_end();
+            fpr_write_h(rd, r.v);
+            return;
+        }
+#if defined(CONFIG_ENABLE_D_EXTENSION)
+        if (sfmt == D)
+        {
+            float64_t a = { fpr_read_d(rs1) };
+            sf_begin(rm);
+            float16_t r = f64_to_f16(a);
+            if (is_nan_h(r.v)) r.v = (r.v & 0x8000u) | 0x7E00u;
+            sf_end();
+            fpr_write_h(rd, r.v);
+            return;
+        }
+#endif
+#if defined(CONFIG_ENABLE_Q_EXTENSION)
+        if (sfmt == Q)
+        {
+            float128_t a;
+            fpr_read_q(rs1, &a);
+            sf_begin(rm);
+            float16_t r = f128M_to_f16(&a);
+            if (is_nan_h(r.v)) r.v = (r.v & 0x8000u) | 0x7E00u;
+            sf_end();
+            fpr_write_h(rd, r.v);
+            return;
+        }
+#endif
+#endif
+        fatal("fcvt H<-%u: unsupported", sfmt);
     }
     else
     {
@@ -1384,6 +1802,11 @@ do_fadd(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
     case S:
         s_add(rs2, rs1, rm, rd);
         break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+        h_add(rs2, rs1, rm, rd);
+        break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
         d_add(rs2, rs1, rm, rd);
@@ -1407,6 +1830,11 @@ do_fsub(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
     case S:
         s_sub(rs2, rs1, rm, rd);
         break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+        h_sub(rs2, rs1, rm, rd);
+        break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
         d_sub(rs2, rs1, rm, rd);
@@ -1430,6 +1858,11 @@ do_fmul(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
     case S:
         s_mul(rs2, rs1, rm, rd);
         break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+        h_mul(rs2, rs1, rm, rd);
+        break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
         d_mul(rs2, rs1, rm, rd);
@@ -1453,6 +1886,11 @@ do_fdiv(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t rm, uint32_t rd)
     case S:
         s_div(rs2, rs1, rm, rd);
         break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+        h_div(rs2, rs1, rm, rd);
+        break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
         d_div(rs2, rs1, rm, rd);
@@ -1476,6 +1914,11 @@ do_fsqrt(uint32_t fmt, uint32_t rs1, uint32_t rm, uint32_t rd)
     case S:
         s_sqrt(rs1, rm, rd);
         break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+        h_sqrt(rs1, rm, rd);
+        break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
         d_sqrt(rs1, rm, rd);
@@ -1499,6 +1942,11 @@ do_fsgnj(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t op, uint32_t rd)
     case S:
         s_fsgnj(rs2, rs1, op, rd);
         break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+        h_fsgnj(rs2, rs1, op, rd);
+        break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
         d_fsgnj(rs2, rs1, op, rd);
@@ -1525,6 +1973,14 @@ do_fminmax(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t op, uint32_t rd)
         else
             s_fmax(rs2, rs1, rd);
         break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+        if (op == 0)
+            h_fmin(rs2, rs1, rd);
+        else
+            h_fmax(rs2, rs1, rd);
+        break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
         if (op == 0)
@@ -1554,6 +2010,11 @@ do_fcmp(uint32_t fmt, uint32_t rs2, uint32_t rs1, uint32_t op, uint32_t rd)
     case S:
         s_fcmp(op, rs2, rs1, rd);
         break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+        h_fcmp(op, rs2, rs1, rd);
+        break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
         d_fcmp(op, rs2, rs1, rd);
@@ -1577,6 +2038,11 @@ do_fclass(uint32_t fmt, uint32_t rs1, uint32_t rd)
     case S:
         s_fclass(rs1, rd);
         break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+        h_fclass(rs1, rd);
+        break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
         d_fclass(rs1, rd);
@@ -1607,6 +2073,11 @@ insf_r_fma(uint32_t ins, uint32_t subop)
     case S:
         s_fma(subop, rs3, rs2, rs1, rm, rd);
         break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+    case H:
+        h_fma(subop, rs3, rs2, rs1, rm, rd);
+        break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
     case D:
         d_fma(subop, rs3, rs2, rs1, rm, rd);
@@ -1667,6 +2138,12 @@ insf_r_fpop(uint32_t ins)
             case S:
                 reg_write(rd, fpr_read_s(rs1));
                 break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+            case H:
+                /* FMV.X.H sign-extends bit 15 into the upper XLEN-16 bits */
+                reg_write(rd, (uint32_t)(int16_t)fpr_read_h(rs1));
+                break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
             case D:
                 reg_write(rd, (uint32_t)fpr_read_d(rs1));
@@ -1698,6 +2175,11 @@ insf_r_fpop(uint32_t ins)
         case S:
             fpr_write_s(rd, reg_read(rs1));
             break;
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+        case H:
+            fpr_write_h(rd, (uint16_t)reg_read(rs1));
+            break;
+#endif
 #ifdef CONFIG_ENABLE_D_EXTENSION
         case D:
             fpr_write_d(rd, (uint64_t)reg_read(rs1));

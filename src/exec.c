@@ -315,12 +315,15 @@ exec(uint32_t ins)
         break;
     }
 #ifdef CONFIG_ENABLE_F_EXTENSION
-    // FP load (FLW / FLD / FLQ)
+    // FP load (FLW / FLD / FLQ / FLH)
     case 0b0000111:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
         switch (funct3)
         {
+        case 1:
+            insf_flh(imm, rs1, rd);
+            break;
         case 2:
             insf_flw(imm, rs1, rd);
             break;
@@ -336,7 +339,7 @@ exec(uint32_t ins)
         }
         break;
     }
-    // FP store (FSW / FSD / FSQ)
+    // FP store (FSW / FSD / FSQ / FSH)
     case 0b0100111:
     {
         uint32_t imm = ((ins >> 25) & 0x7F) << 5;
@@ -344,6 +347,9 @@ exec(uint32_t ins)
         imm = sign_extend_12(imm);
         switch (funct3)
         {
+        case 1:
+            insf_fsh(imm, rs1, rs2);
+            break;
         case 2:
             insf_fsw(imm, rs1, rs2);
             break;

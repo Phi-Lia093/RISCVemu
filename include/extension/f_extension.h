@@ -39,14 +39,6 @@ void set_fflags(uint32_t flags);
 void set_frm(uint32_t frm);
 void set_fcsr(uint32_t csr);
 
-/* FPR accessors - exported for debugger and other modules */
-uint32_t fpr_read_s(uint32_t r);
-uint64_t fpr_read_d(uint32_t r);
-void fpr_read_q(uint32_t r, float128_t *out);
-void fpr_write_s(uint32_t r, uint32_t v);
-void fpr_write_d(uint32_t r, uint64_t v);
-void fpr_write_q(uint32_t r, const float128_t *in);
-
 #define CSR_FFLAGS 0x001
 #define CSR_FRM 0x002
 #define CSR_FCSR 0x003
@@ -75,11 +67,23 @@ get_rm(uint32_t rm)
     return (rm == DYN) ? (fcsr >> 5) & 0b111 : rm;
 }
 
+/* FPR accessors - exported for debugger and other modules */
+uint32_t fpr_read_s(uint32_t r);
+uint64_t fpr_read_d(uint32_t r);
+uint16_t fpr_read_h(uint32_t r);
+void fpr_read_q(uint32_t r, float128_t *out);
+void fpr_write_s(uint32_t r, uint32_t v);
+void fpr_write_d(uint32_t r, uint64_t v);
+void fpr_write_h(uint32_t r, uint16_t v);
+void fpr_write_q(uint32_t r, const float128_t *in);
+
 /* FP load / store */
 void insf_flw(uint32_t imm, uint32_t rs1, uint32_t rd);
 void insf_fsw(uint32_t imm, uint32_t rs1, uint32_t rs2);
 void insf_fld(uint32_t imm, uint32_t rs1, uint32_t rd);
 void insf_fsd(uint32_t imm, uint32_t rs1, uint32_t rs2);
+void insf_flh(uint32_t imm, uint32_t rs1, uint32_t rd);
+void insf_fsh(uint32_t imm, uint32_t rs1, uint32_t rs2);
 void insf_flq(uint32_t imm, uint32_t rs1, uint32_t rd);
 void insf_fsq(uint32_t imm, uint32_t rs1, uint32_t rs2);
 

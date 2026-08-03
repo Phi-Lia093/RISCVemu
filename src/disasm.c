@@ -125,7 +125,11 @@ fmt_name(uint32_t fmt)
     case 1:
         return "d";
     case 2:
+#ifdef CONFIG_ENABLE_ZFH_EXTENSION
+        return "h";
+#else
         return "q";
+#endif
     default:
         return "?";
     }
@@ -151,12 +155,16 @@ disasm(uint32_t ins)
 
     switch (opcode) // keep consistent with exec.c
     {
-    // FP Load (FLW / FLD / FLQ)
+    // FP Load (FLW / FLD / FLQ / FLH)
     case 0b0000111:
     {
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
         switch (funct3)
         {
+        case 1: // FLH
+            sprintf(disasm_buf, "flh %s, %d(%s)", freg_name(rd), (int32_t)imm,
+                    reg_name(rs1));
+            break;
         case 2: // FLW
             sprintf(disasm_buf, "flw %s, %d(%s)", freg_name(rd), (int32_t)imm,
                     reg_name(rs1));
@@ -175,7 +183,7 @@ disasm(uint32_t ins)
         break;
     }
 
-    // FP Store (FSW / FSD / FSQ)
+    // FP Store (FSW / FSD / FSQ / FSH)
     case 0b0100111:
     {
         uint32_t imm = ((ins >> 25) & 0x7F) << 5;
@@ -183,6 +191,10 @@ disasm(uint32_t ins)
         imm = sign_extend_12(imm);
         switch (funct3)
         {
+        case 1: // FSH
+            sprintf(disasm_buf, "fsh %s, %d(%s)", freg_name(rs2), (int32_t)imm,
+                    reg_name(rs1));
+            break;
         case 2: // FSW
             sprintf(disasm_buf, "fsw %s, %d(%s)", freg_name(rs2), (int32_t)imm,
                     reg_name(rs1));
@@ -292,9 +304,8 @@ disasm(uint32_t ins)
             if (funct3 == 0)
             {
                 // fmv.x.*
-                const char *subop[] = { "fmv.x.s", "fmv.x.d", "fmv.x.q" };
-                sprintf(disasm_buf, "%s %s, %s", subop[fmt], reg_name(rd),
-                        freg_name(rs1));
+                sprintf(disasm_buf, "fmv.x.%s %s, %s", fmt_name(fmt),
+                        reg_name(rd), freg_name(rs1));
             }
             else if (funct3 == 1)
             {
@@ -309,8 +320,7 @@ disasm(uint32_t ins)
             break;
         case 30: // FMV.*.X
         {
-            const char *subop[] = { "fmv.s.x", "fmv.d.x", "fmv.q.x" };
-            sprintf(disasm_buf, "%s %s, %s", subop[fmt], freg_name(rd),
+            sprintf(disasm_buf, "fmv.%s.x %s, %s", fmt_name(fmt), freg_name(rd),
                     reg_name(rs1));
             break;
         }
