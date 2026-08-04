@@ -45,6 +45,13 @@
 #define CSR_MIP       0x344
 #define CSR_MNSTATUS  0x744
 
+// Machine-mode counter/hang CSRs (writable in M-mode)
+#define CSR_MCOUNTINHIBIT 0x320
+#define CSR_MCYCLE        0xB00
+#define CSR_MCYCLEH       0xB80
+#define CSR_MINSTRET      0xB02
+#define CSR_MINSTRETH     0xB82
+
 #define CSR_CYCLE_LO  0xC00
 #define CSR_CYCLE_HI  0xC80
 #define CSR_TIME_LO   0xC01

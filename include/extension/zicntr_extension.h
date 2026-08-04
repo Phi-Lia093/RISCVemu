@@ -29,6 +29,7 @@
 
 extern uint64_t cycle;
 extern uint64_t instret;
+extern uint32_t instret_suppress_next;
 
 #define CSR_CYCLE_LO 0xC00
 #define CSR_TIME_LO 0xC01
@@ -44,6 +45,8 @@ uint32_t get_zicntr_time_l();
 uint32_t get_zicntr_time_h();
 uint32_t get_zicntr_instret_l();
 uint32_t get_zicntr_instret_h();
+void set_zicntr_minstret_l(uint32_t val);
+void set_zicntr_minstret_h(uint32_t val);
 
 #endif // CONFIG_ENABLE_ZICNTR_EXTENSION
 

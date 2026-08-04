@@ -198,6 +198,23 @@ init_csr_table(void)
     csr_table[CSR_INSTRET_HI]
         = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_instret_h, NULL };
 
+    // Writable machine counter/hang CSRs (mcountinhibit, mcycle, minstret)
+    // Register as RW so M-mode writes take effect (rv32mi/instret_overflow.S).
+    csr_table[CSR_MCOUNTINHIBIT]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MCYCLE]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MCYCLEH]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    // minstret/minstreth: writable aliases of the live instret counter. Writing
+    // suppresses the architecturally-incrementing counter for that instruction.
+    csr_table[CSR_MINSTRET]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_zicntr_instret_l,
+                                  set_zicntr_minstret_l };
+    csr_table[CSR_MINSTRETH]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_zicntr_instret_h,
+                                  set_zicntr_minstret_h };
+
     // Physical Memory Protection
     csr_table[CSR_PMPCFG0]
         = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg };

@@ -71,4 +71,25 @@ get_zicntr_instret_h()
     return (uint32_t)(instret >> 32);
 }
 
+// Per RISC-V, writing minstret/minstreth writes the low/high 32 bits of the
+// architectural instret counter, and that instruction's own increment is
+// suppressed. We expose a global flag that the main loop consults to skip the
+// increment once, implementing the "overflow suppression" behavior exercised by
+// rv32mi/instret_overflow.S.
+uint32_t instret_suppress_next = 0;
+
+void
+set_zicntr_minstret_l(uint32_t val)
+{
+    instret = (instret & 0xFFFFFFFF00000000ULL) | (uint64_t)val;
+    instret_suppress_next = 1;
+}
+
+void
+set_zicntr_minstret_h(uint32_t val)
+{
+    instret = (instret & 0x00000000FFFFFFFFULL) | ((uint64_t)val << 32);
+    instret_suppress_next = 1;
+}
+
 #endif // CONFIG_ENABLE_ZICNTR_EXTENSION

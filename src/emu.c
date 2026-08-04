@@ -257,7 +257,14 @@ main(int argc, char **argv)
         g_state.pc += 4;
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
         cycle++;
-        instret++;
+        if (unlikely(instret_suppress_next))
+        {
+            instret_suppress_next = 0;
+        }
+        else
+        {
+            instret++;
+        }
 #endif
         // Detect the harness "write_tohost" spin loop: a short fixed PC cycle.
         {
@@ -300,7 +307,14 @@ main(int argc, char **argv)
         g_state.pc += 4;
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
         cycle++;
-        instret++;
+        if (unlikely(instret_suppress_next))
+        {
+            instret_suppress_next = 0;
+        }
+        else
+        {
+            instret++;
+        }
 #endif
         // Detect the harness "write_tohost" spin loop: a short fixed PC cycle.
         {
