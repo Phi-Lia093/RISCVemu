@@ -24,8 +24,6 @@
 #include <extension/system.h>
 #include <extension/zicsr_extension.h>
 #include <logger.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
 #include <extension/zicntr_extension.h>

@@ -14,7 +14,7 @@ set(CMAKE_SKIP_RPATH TRUE)
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
 
 option(CONFIG_ENABLE_DEBUGGER "Enable built-in debugger (-d flag)" ON)
-option(CONFIG_SUPPORT_MISALIGN "Support misaligned memory access (slower)" ON)
+option(CONFIG_SUPPORT_MISALIGN "Support misaligned memory access (slower)" OFF)
 
 option(CONFIG_ENABLE_M_EXTENSION "M Extension: Integer Multiplication/Division" ON)
 option(CONFIG_ENABLE_A_EXTENSION "A Extension: Atomic Operations (LR/SC/AMO)" ON)
