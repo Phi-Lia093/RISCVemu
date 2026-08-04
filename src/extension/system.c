@@ -34,6 +34,19 @@ mstatus_read(void)
     return csr_table[CSR_MSTATUS].value;
 }
 
+int
+misa_c_enabled(void)
+{
+    // The 'C' letter bit is bit index ('C' - 'A') = 2 in misa.
+    return (csr_table[CSR_MISA].value >> 2) & 1;
+}
+
+void
+raise_illegal(uint32_t ins)
+{
+    raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins);
+}
+
 void
 mstatus_write(uint32_t val)
 {
@@ -381,7 +394,19 @@ raise_machine_interrupt(uint32_t irq, uint32_t pc)
     g_state.privilege = PRV_MACHINE;
 
     uint32_t mtvec = csr_read(CSR_MTVEC);
-    g_state.pc = (mtvec & ~0x3) - 4;
+    uint32_t base = mtvec & ~0x3U;
+    if (mtvec & 0x1) // vectored mode: handler = base + 4 * irq
+    {
+        g_state.pc = base + ((irq & 0xF) << 2);
+    }
+    else
+    {
+        g_state.pc = base;
+    }
+    // Interrupts are dispatched from check_and_handle_interrupts() at the top
+    // of the main loop, immediately before the next fetch, so we set the
+    // program counter to the handler directly (no -4 compensation).
+    (void)pc;
 }
 
 static void
@@ -417,7 +442,15 @@ raise_supervisor_interrupt_internal(uint32_t irq, uint32_t pc)
     g_state.privilege = PRV_SUPERVISOR;
 
     uint32_t stvec = csr_read(CSR_STVEC);
-    g_state.pc = (stvec & ~0x3) - 4;
+    uint32_t base = stvec & ~0x3U;
+    if (stvec & 0x1) // vectored mode: handler = base + 4 * irq
+    {
+        g_state.pc = base + ((irq & 0xF) << 2);
+    }
+    else
+    {
+        g_state.pc = base;
+    }
 }
 
 void

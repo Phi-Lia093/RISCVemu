@@ -27,6 +27,12 @@
 
 #include <stdint.h>
 
+#include <emu.h>
+
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+
+#endif
+
 #define MSTATUS_UIE (1 << 0)
 #define MSTATUS_SIE (1 << 1)
 #define MSTATUS_MIE (1 << 3)
@@ -65,6 +71,12 @@ void ins_mnret(void);
 void ins_wfi(void);
 void ins_sctrclr(void);
 void ins_sfence_vma(void);
+
+// Returns true if the misa.C (compressed) extension bit is enabled.
+int misa_c_enabled(void);
+
+// Raises CAUSE_ILLEGAL_INSTRUCTION with the offending instruction word.
+void raise_illegal(uint32_t ins);
 
 uint32_t mstatus_read(void);
 void mstatus_write(uint32_t val);

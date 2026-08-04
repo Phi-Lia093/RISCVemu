@@ -253,6 +253,7 @@ main(int argc, char **argv)
 
         uint32_t fetch_pc = g_state.pc;
         uint32_t ins = mem_read32_unsigned(fetch_pc);
+        fprintf(stderr, "FX 0x%08x\n", fetch_pc);
         exec(ins);
         g_state.pc += 4;
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
@@ -303,6 +304,7 @@ main(int argc, char **argv)
 
         uint32_t fetch_pc = g_state.pc;
         uint32_t ins = mem_read32_unsigned(fetch_pc);
+        fprintf(stderr, "FX 0x%08x\n", fetch_pc);
         exec(ins);
         g_state.pc += 4;
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
