@@ -39,6 +39,17 @@ void set_fflags(uint32_t flags);
 void set_frm(uint32_t frm);
 void set_fcsr(uint32_t csr);
 
+#include <emu.h>
+#include <extension/system.h>
+#include <extension/zicsr_extension.h>
+// mstatus.FS == 0 means the FPU is "off": any floating-point instruction
+// (including FP loads/stores) raises an illegal-instruction exception.
+static inline int
+fpu_fs_off(void)
+{
+    return (csr_read(CSR_MSTATUS) & MSTATUS_FS_MASK) == 0;
+}
+
 #define CSR_FFLAGS 0x001
 #define CSR_FRM 0x002
 #define CSR_FCSR 0x003

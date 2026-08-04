@@ -27,6 +27,7 @@
 #include <sys/mman.h>
 
 #include <debugger.h>
+#include <device/clint.h>
 #include <emu.h>
 #include <exec.h>
 #include <fmap.h>
@@ -283,6 +284,7 @@ main(int argc, char **argv)
 #endif
         last_fetch_pc = fetch_pc;
         g_state.pc += 4;
+        clint_tick();
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
         cycle++;
         if (unlikely(instret_suppress_next))
@@ -367,6 +369,7 @@ main(int argc, char **argv)
 #endif
         last_fetch_pc = fetch_pc;
         g_state.pc += 4;
+        clint_tick();
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
         cycle++;
         if (unlikely(instret_suppress_next))

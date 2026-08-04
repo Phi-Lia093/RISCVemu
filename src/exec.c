@@ -338,6 +338,11 @@ exec(uint32_t ins)
     // FP load (FLW / FLD / FLQ / FLH)
     case 0b0000111:
     {
+        if (fpu_fs_off())
+        {
+            raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins);
+            break;
+        }
         uint32_t imm = sign_extend_12((ins >> 20) & 0xFFF);
         switch (funct3)
         {
@@ -362,6 +367,11 @@ exec(uint32_t ins)
     // FP store (FSW / FSD / FSQ / FSH)
     case 0b0100111:
     {
+        if (fpu_fs_off())
+        {
+            raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins);
+            break;
+        }
         uint32_t imm = ((ins >> 25) & 0x7F) << 5;
         imm |= ((ins >> 7) & 0x1F);
         imm = sign_extend_12(imm);
@@ -387,19 +397,24 @@ exec(uint32_t ins)
     }
     // FMA: fmadd / fmsub / fnmsub / fnmadd
     case 0b1000011:
+        if (fpu_fs_off()) { raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins); break; }
         insf_r_fma(ins, 0);
         break; // fmadd
     case 0b1000111:
+        if (fpu_fs_off()) { raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins); break; }
         insf_r_fma(ins, 1);
         break; // fmsub
     case 0b1001011:
+        if (fpu_fs_off()) { raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins); break; }
         insf_r_fma(ins, 2);
         break; // fnmsub
     case 0b1001111:
+        if (fpu_fs_off()) { raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins); break; }
         insf_r_fma(ins, 3);
         break; // fnmadd
     // FP-OP
     case 0b1010011:
+        if (fpu_fs_off()) { raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins); break; }
         insf_r_fpop(ins);
         break;
 #endif

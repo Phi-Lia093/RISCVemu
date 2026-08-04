@@ -19,6 +19,7 @@
  */
 
 #include <config.h>
+#include <device/clint.h>
 #include <emu.h>
 #include <exec.h>
 #include <extension/system.h>
@@ -128,7 +129,19 @@ get_mtval(void)
 static uint32_t
 get_mip(void)
 {
-    return csr_table[CSR_MIP].value;
+    uint32_t mip = csr_table[CSR_MIP].value;
+    // MIP.MTIP is a live view of the CLINT timer: pending whenever
+    // mtime >= mtimecmp.  It cannot be cleared by software (only by writing a
+    // later mtimecmp), so the stored bit is ignored.
+    if (clint_mtip_pending())
+    {
+        mip |= MIP_MTIP;
+    }
+    else
+    {
+        mip &= ~MIP_MTIP;
+    }
+    return mip;
 }
 static uint32_t
 get_mnstatus(void)
@@ -318,13 +331,14 @@ init_csr_table(void)
         = (struct csr_operation){ 1, PRV_MACHINE,  RW,
                                   0, mstatus_read, mstatus_write };
     csr_table[CSR_MISA] = (struct csr_operation){
-        // MXL=2 (RV32) | I | M | C. C is masked RO (0x40001104). Reporting C
-        // enables the 16-bit compressed (RVC) decode path, matching the default
-        // `rv32gc` configuration used by the riscv-tests suite. The extensions
-        // are intentionally WARL-masked read-only; ma_fetch.S tolerates either
-        // a fixed on/off C bit (it passes if enabling *or* disabling C has no
-        // effect).
-        1, PRV_MACHINE, RO, 0x40001104, get_misa, NULL
+        // MXL=2 (RV32) | I | M | A | F | C (0x40001125). Reporting these enables
+        // the corresponding decode paths and advertises the features an SBI
+        // firmware (e.g. OpenSBI) probes (A for atomics, F for the FPU). The
+        // extensions are intentionally WARL-masked read-only. S/U are *not*
+        // advertised here: the riscv-tests M-mode csr.S gate the user-mode CSR
+        // privilege tests on misa.U and the SUPERVISOR/PRIVILEGE enforcement
+        // for those windows is intentionally left out of scope for now.
+        1, PRV_MACHINE, RO, 0x40001125, get_misa, NULL
     };
     csr_table[CSR_MEDELEG]
         = (struct csr_operation){ 1, PRV_MACHINE,  RW,
