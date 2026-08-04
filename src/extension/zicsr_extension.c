@@ -325,6 +325,9 @@ init_csr_table(void)
         = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_mimpid, NULL };
     csr_table[CSR_MHARTID]
         = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_mhartid, NULL };
+    // mconfigptr: pointer to a config-structure table; advertise 0 (none).
+    csr_table[CSR_MCONFIGPTR]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, NULL, NULL };
 
     // Machine Trap Setup
     csr_table[CSR_MSTATUS]
@@ -353,6 +356,22 @@ init_csr_table(void)
     csr_table[CSR_MCOUNTEREN]
         = (struct csr_operation){ 1,          PRV_MACHINE,    RW,
                                   0xFFFFFFFF, get_mcounteren, set_mcounteren };
+    // mstatush / menvcfg / menvcfgh / mnscratch / mseccfg / mseccfgh: plain
+    // writable machine registers. OpenSBI & other SBI firmware probe/write
+    // these during early init (e.g. "csrc mstatush", envcfg setup); without a
+    // registration any access raises an illegal-instruction fault.
+    csr_table[CSR_MSTATUSH]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MENVCFG]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MENVCFGH]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MNSCRATCH]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MSECCFG]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+    csr_table[CSR_MSECCFGH]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
 
     // Machine Trap Handling
     csr_table[CSR_MSCRATCH]
@@ -449,6 +468,11 @@ init_csr_table(void)
         = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
     // scounteren (0x106): S-mode counter enable; a plain RW register suffices.
     csr_table[0x106]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+    // senvcfg / senvcfgh: S-mode environment configuration; plain RW registers.
+    csr_table[CSR_SENVCFG]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+    csr_table[CSR_SENVCFGH]
         = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
 }
 

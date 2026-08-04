@@ -37,6 +37,11 @@
 #define CSR_MIE 0x304
 #define CSR_MTVEC 0x305
 #define CSR_MCOUNTEREN 0x306
+// mstatush (0x310): upper 32 bits of mstatus on RV32 (SXL/UXL/UBE etc.).
+#define CSR_MSTATUSH 0x310
+// Machine-mode environment configuration (RISC-V 1.12 + Smstateen / envcfg).
+#define CSR_MENVCFG 0x30A
+#define CSR_MENVCFGH 0x31A
 
 #define CSR_MSCRATCH 0x340
 #define CSR_MEPC 0x341
@@ -95,12 +100,20 @@
 #define CSR_STVAL 0x143
 #define CSR_SIP 0x144
 #define CSR_SATP 0x180
+// scounteren (0x106) / senvcfg (0x10A) and RV32 high half senvcfgh (0x11A).
+#define CSR_SENVCFG 0x10A
+#define CSR_SENVCFGH 0x11A
 
 #define CSR_MVENDORID 0xF11
 #define CSR_MARCHID 0xF12
 #define CSR_MIMPID 0xF13
 #define CSR_MHARTID 0xF14
 #define CSR_MCONFIGPTR 0xF15
+
+// Machine Security Configuration (MSECCFG) and scratch for NMI handler.
+#define CSR_MSECCFG 0x747
+#define CSR_MSECCFGH 0x757
+#define CSR_MNSCRATCH 0x740
 
 #define RW 1
 #define RO 0
