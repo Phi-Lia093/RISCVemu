@@ -231,6 +231,7 @@ raise_machine_exception(uint32_t cause, uint32_t tval, uint32_t pc)
     csr_write(CSR_MEPC, pc);
 
     g_state.privilege = PRV_MACHINE;
+    g_state.just_trapped = 1;
 
     uint32_t mtvec = csr_read(CSR_MTVEC);
     g_state.pc = (mtvec & ~0x3) - 4;
@@ -393,6 +394,7 @@ raise_machine_interrupt(uint32_t irq, uint32_t pc)
     csr_write(CSR_MEPC, pc);
 
     g_state.privilege = PRV_MACHINE;
+    g_state.just_trapped = 1;
 
     uint32_t mtvec = csr_read(CSR_MTVEC);
     uint32_t base = mtvec & ~0x3U;

@@ -224,6 +224,7 @@ main(int argc, char **argv)
     for (int i = 0; i < 8; i++) loop_window[i] = 0;
     uint32_t loop_window_pos = 0;
     int spin_count = 0;
+    int spin_armed = 0;
     uint32_t last_fetch_pc = 0;
 
 #ifdef CONFIG_ENABLE_DEBUGGER
@@ -269,7 +270,17 @@ main(int argc, char **argv)
             instret++;
         }
 #endif
-        // Detect the harness "write_tohost" spin loop: a short fixed PC cycle.
+        // Detect the harness "write_tohost" spin loop (armed only once the
+        // program traps; the loop is reached after a swallowed exception).
+        if (g_state.just_trapped)
+        {
+            g_state.just_trapped = 0;
+            spin_armed = 1;
+            for (int i = 0; i < 8; i++) loop_window[i] = 0;
+            loop_window_pos = 0;
+            spin_count = 0;
+        }
+        if (spin_armed)
         {
             int seen = 0;
             for (int i = 0; i < 8; i++)
@@ -280,7 +291,7 @@ main(int argc, char **argv)
                 spin_count = 0;
             loop_window[loop_window_pos] = fetch_pc;
             loop_window_pos = (loop_window_pos + 1) % 8;
-            if (spin_count >= 8)
+            if (spin_count >= 64)
             {
                 // Entered the harness "write_tohost" loop: the result is
                 // latched in the TESTNUM/GPR (gp). Mirror the RVTEST_PASS /
@@ -321,7 +332,17 @@ main(int argc, char **argv)
             instret++;
         }
 #endif
-        // Detect the harness "write_tohost" spin loop: a short fixed PC cycle.
+        // Detect the harness "write_tohost" spin loop (armed only once the
+        // program traps; the loop is reached after a swallowed exception).
+        if (g_state.just_trapped)
+        {
+            g_state.just_trapped = 0;
+            spin_armed = 1;
+            for (int i = 0; i < 8; i++) loop_window[i] = 0;
+            loop_window_pos = 0;
+            spin_count = 0;
+        }
+        if (spin_armed)
         {
             int seen = 0;
             for (int i = 0; i < 8; i++)
@@ -332,7 +353,7 @@ main(int argc, char **argv)
                 spin_count = 0;
             loop_window[loop_window_pos] = fetch_pc;
             loop_window_pos = (loop_window_pos + 1) % 8;
-            if (spin_count >= 8)
+            if (spin_count >= 64)
             {
                 // Entered the harness "write_tohost" loop: the result is
                 // latched in the TESTNUM/GPR (gp). Mirror the RVTEST_PASS /

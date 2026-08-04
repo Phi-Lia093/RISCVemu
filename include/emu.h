@@ -51,6 +51,7 @@ struct machine_state
     uint32_t breakpoint_enabled;
 #endif
     uint32_t privilege;
+    int just_trapped;
 };
 
 extern struct machine_state g_state;
