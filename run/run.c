@@ -36,7 +36,7 @@ _start(void)
 {
     __asm__ volatile("la sp, _stack_top\n");
     _main();
-    __asm__ volatile("ecall\n");
+    __asm__ volatile("li a7, 93;ecall\n");
     while (1);
 }
 

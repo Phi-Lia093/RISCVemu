@@ -24,6 +24,7 @@
 #include <emu.h>
 #include <logger.h>
 #include <mem.h>
+#include <mmu.h>
 #include <stdint.h>
 
 #include <config.h>
@@ -190,7 +191,7 @@ insi_i_lb(uint32_t imm, uint32_t rs1, uint32_t rd)
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
     if (sdtrig_check_load_trigger(addr)) return;
 #endif
-    int32_t val = mem_read8_signed(addr);
+    int32_t val = mmu_read8_signed(addr);
     reg_write(rd, (uint32_t)val);
 }
 
@@ -215,7 +216,7 @@ insi_i_lh(uint32_t imm, uint32_t rs1, uint32_t rd)
         return;
     }
 #endif
-    int32_t val = mem_read16_signed(addr);
+    int32_t val = mmu_read16_signed(addr);
     reg_write(rd, (uint32_t)val);
 }
 
@@ -240,7 +241,7 @@ insi_i_lw(uint32_t imm, uint32_t rs1, uint32_t rd)
         return;
     }
 #endif
-    int32_t val = mem_read32_signed(addr);
+    int32_t val = mmu_read32_signed(addr);
     reg_write(rd, (uint32_t)val);
 }
 
@@ -251,7 +252,7 @@ insi_i_lbu(uint32_t imm, uint32_t rs1, uint32_t rd)
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
     if (sdtrig_check_load_trigger(addr)) return;
 #endif
-    uint32_t val = mem_read8_unsigned(addr);
+    uint32_t val = mmu_read8_unsigned(addr);
     reg_write(rd, val);
 }
 
@@ -276,7 +277,7 @@ insi_i_lhu(uint32_t imm, uint32_t rs1, uint32_t rd)
         return;
     }
 #endif
-    uint32_t val = mem_read16_unsigned(addr);
+    uint32_t val = mmu_read16_unsigned(addr);
     reg_write(rd, val);
 }
 
@@ -307,7 +308,7 @@ insi_s_sb(uint32_t imm, uint32_t rs2, uint32_t rs1)
     if (sdtrig_check_store_trigger(addr)) return;
 #endif
     uint32_t val = reg_read(rs2);
-    mem_write8(addr, (uint8_t)(val & 0xFF));
+    mmu_write8(addr, (uint8_t)(val & 0xFF));
 }
 
 static inline void
@@ -332,7 +333,7 @@ insi_s_sh(uint32_t imm, uint32_t rs2, uint32_t rs1)
     }
 #endif
     uint32_t val = reg_read(rs2);
-    mem_write16(addr, (uint16_t)(val & 0xFFFF));
+    mmu_write16(addr, (uint16_t)(val & 0xFFFF));
 }
 
 static inline void
@@ -357,7 +358,7 @@ insi_s_sw(uint32_t imm, uint32_t rs2, uint32_t rs1)
     }
 #endif
     uint32_t val = reg_read(rs2);
-    mem_write32(addr, val);
+    mmu_write32(addr, val);
 }
 
 static inline void

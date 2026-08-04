@@ -32,6 +32,7 @@
 #include <fmap.h>
 #include <logger.h>
 #include <mem.h>
+#include <mmu.h>
 
 #include <config.h>
 
@@ -255,15 +256,31 @@ main(int argc, char **argv)
         }
 
         uint32_t fetch_pc = g_state.pc;
-        uint32_t ins = mem_read32_unsigned(fetch_pc);
         g_prev_ins_pc = last_fetch_pc;
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
-        // Sdtrig execute (fetch) breakpoint. raise_exception() below sets pc to
-        // the trap vector; the subsequent pc += 4 resumes there, and the trap
-        // is attributed to the fetch PC via MEPC.
-        if (!sdtrig_check_fetch_trigger(fetch_pc))
-#endif
+        uint32_t ins;
+        int fetch_exec = 1;
+        // Fetch translation (SV32 page tables). On a fetch page fault, mmu
+        // raises the exception (which sets pc to the trap vector - 4, so the
+        // unconditional pc += 4 below lands exactly on the trap vector).
+        if (!mmu_fetch_ok(fetch_pc, &ins))
+        {
+            fetch_exec = 0;
+        }
+        else if (sdtrig_check_fetch_trigger(fetch_pc))
+        {
+            // Fetch breakpoint fired: raise_exception set pc to the trap
+            // vector - 4; don't execute, just let pc += 4 complete the trap.
+            fetch_exec = 0;
+        }
+        if (fetch_exec)
+        {
             exec(ins);
+        }
+#else
+        uint32_t ins = mem_read32_unsigned(fetch_pc);
+        exec(ins);
+#endif
         last_fetch_pc = fetch_pc;
         g_state.pc += 4;
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
@@ -323,12 +340,31 @@ main(int argc, char **argv)
         }
 
         uint32_t fetch_pc = g_state.pc;
-        uint32_t ins = mem_read32_unsigned(fetch_pc);
         g_prev_ins_pc = last_fetch_pc;
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
-        if (!sdtrig_check_fetch_trigger(fetch_pc))
-#endif
+        uint32_t ins;
+        int fetch_exec = 1;
+        // Fetch translation (SV32 page tables). On a fetch page fault, mmu
+        // raises the exception (which sets pc to the trap vector - 4, so the
+        // unconditional pc += 4 below lands exactly on the trap vector).
+        if (!mmu_fetch_ok(fetch_pc, &ins))
+        {
+            fetch_exec = 0;
+        }
+        else if (sdtrig_check_fetch_trigger(fetch_pc))
+        {
+            // Fetch breakpoint fired: raise_exception set pc to the trap
+            // vector - 4; don't execute, just let pc += 4 complete the trap.
+            fetch_exec = 0;
+        }
+        if (fetch_exec)
+        {
             exec(ins);
+        }
+#else
+        uint32_t ins = mem_read32_unsigned(fetch_pc);
+        exec(ins);
+#endif
         last_fetch_pc = fetch_pc;
         g_state.pc += 4;
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION

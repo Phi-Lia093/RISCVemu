@@ -223,6 +223,40 @@ set_mip(uint32_t val)
     csr_table[CSR_MIP].value = val;
 }
 
+// --- Supervisor interrupt-enable/pending aliasing ---------------------------
+// sie/sip are views of the S-relevant bits of mie/mip (SSIP=1, STIP=5,
+// SEIP=9).  Writing sie/sip updates the corresponding mie/mip bits, and
+// reading returns them.
+#define SIP_SIE_S_BITS (MIP_SSIP | MIP_STIP | MIP_SEIP)
+
+static uint32_t
+get_sie(void)
+{
+    return csr_read(CSR_MIE) & SIP_SIE_S_BITS;
+}
+
+static void
+set_sie(uint32_t val)
+{
+    uint32_t mie = csr_read(CSR_MIE);
+    mie = (mie & ~SIP_SIE_S_BITS) | (val & SIP_SIE_S_BITS);
+    csr_write(CSR_MIE, mie);
+}
+
+static uint32_t
+get_sip(void)
+{
+    return csr_read(CSR_MIP) & SIP_SIE_S_BITS;
+}
+
+static void
+set_sip(uint32_t val)
+{
+    uint32_t mip = csr_read(CSR_MIP);
+    mip = (mip & ~SIP_SIE_S_BITS) | (val & SIP_SIE_S_BITS);
+    csr_write(CSR_MIP, mip);
+}
+
 void
 init_csr_table(void)
 {
@@ -384,7 +418,7 @@ init_csr_table(void)
         = (struct csr_operation){ 1, PRV_SUPERVISOR, RW,
                                   0, sstatus_read,   sstatus_write };
     csr_table[CSR_SIE]
-        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, get_sie, set_sie };
     csr_table[CSR_STVEC]
         = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
     csr_table[CSR_SSCRATCH]
@@ -396,8 +430,11 @@ init_csr_table(void)
     csr_table[CSR_STVAL]
         = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
     csr_table[CSR_SIP]
-        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, get_sip, set_sip };
     csr_table[CSR_SATP]
+        = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
+    // scounteren (0x106): S-mode counter enable; a plain RW register suffices.
+    csr_table[0x106]
         = (struct csr_operation){ 1, PRV_SUPERVISOR, RW, 0, NULL, NULL };
 }
 

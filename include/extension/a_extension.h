@@ -30,6 +30,7 @@
 #include <hashmap_u32.h>
 #include <logger.h>
 #include <mem.h>
+#include <mmu.h>
 #include <stdint.h>
 
 static inline uint32_t
@@ -95,7 +96,7 @@ insa_r_lr_w(uint32_t rs1, uint32_t rd)
         return;
     }
 
-    reg_write(rd, mem_read32_unsigned(addr));
+    reg_write(rd, mmu_read32_unsigned(addr));
     set_reserve_status(addr);
 }
 
@@ -114,7 +115,7 @@ insa_r_sc_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
 
     if (get_reserve_status(addr))
     {
-        mem_write32(addr, value);
+        mmu_write32(addr, value);
         reg_write(rd, 0);
         clear_reserve_status(addr);
     }
@@ -137,8 +138,8 @@ insa_r_amoswap_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
         return;
     }
 
-    uint32_t old_value = mem_read32_unsigned(addr);
-    mem_write32(addr, value);
+    uint32_t old_value = mmu_read32_unsigned(addr);
+    mmu_write32(addr, value);
     reg_write(rd, old_value);
 }
 
@@ -155,8 +156,8 @@ insa_r_amoadd_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
         return;
     }
 
-    uint32_t old_value = mem_read32_unsigned(addr);
-    mem_write32(addr, old_value + value);
+    uint32_t old_value = mmu_read32_unsigned(addr);
+    mmu_write32(addr, old_value + value);
     reg_write(rd, old_value);
 }
 
@@ -173,8 +174,8 @@ insa_r_amoand_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
         return;
     }
 
-    uint32_t old_value = mem_read32_unsigned(addr);
-    mem_write32(addr, old_value & value);
+    uint32_t old_value = mmu_read32_unsigned(addr);
+    mmu_write32(addr, old_value & value);
     reg_write(rd, old_value);
 }
 
@@ -191,8 +192,8 @@ insa_r_amoor_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
         return;
     }
 
-    uint32_t old_value = mem_read32_unsigned(addr);
-    mem_write32(addr, old_value | value);
+    uint32_t old_value = mmu_read32_unsigned(addr);
+    mmu_write32(addr, old_value | value);
     reg_write(rd, old_value);
 }
 
@@ -209,8 +210,8 @@ insa_r_amoxor_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
         return;
     }
 
-    uint32_t old_value = mem_read32_unsigned(addr);
-    mem_write32(addr, old_value ^ value);
+    uint32_t old_value = mmu_read32_unsigned(addr);
+    mmu_write32(addr, old_value ^ value);
     reg_write(rd, old_value);
 }
 
@@ -227,11 +228,11 @@ insa_r_amomax_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
         return;
     }
 
-    uint32_t old_value = mem_read32_unsigned(addr);
+    uint32_t old_value = mmu_read32_unsigned(addr);
     int32_t signed_old = (int32_t)old_value;
     int32_t signed_val = (int32_t)value;
     uint32_t new_value = (signed_old > signed_val) ? old_value : value;
-    mem_write32(addr, new_value);
+    mmu_write32(addr, new_value);
     reg_write(rd, old_value);
 }
 
@@ -248,11 +249,11 @@ insa_r_amomin_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
         return;
     }
 
-    uint32_t old_value = mem_read32_unsigned(addr);
+    uint32_t old_value = mmu_read32_unsigned(addr);
     int32_t signed_old = (int32_t)old_value;
     int32_t signed_val = (int32_t)value;
     uint32_t new_value = (signed_old < signed_val) ? old_value : value;
-    mem_write32(addr, new_value);
+    mmu_write32(addr, new_value);
     reg_write(rd, old_value);
 }
 
@@ -269,9 +270,9 @@ insa_r_amomaxu_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
         return;
     }
 
-    uint32_t old_value = mem_read32_unsigned(addr);
+    uint32_t old_value = mmu_read32_unsigned(addr);
     uint32_t new_value = (old_value > value) ? old_value : value;
-    mem_write32(addr, new_value);
+    mmu_write32(addr, new_value);
     reg_write(rd, old_value);
 }
 
@@ -288,9 +289,9 @@ insa_r_amominu_w(uint32_t rs1, uint32_t rs2, uint32_t rd)
         return;
     }
 
-    uint32_t old_value = mem_read32_unsigned(addr);
+    uint32_t old_value = mmu_read32_unsigned(addr);
     uint32_t new_value = (old_value < value) ? old_value : value;
-    mem_write32(addr, new_value);
+    mmu_write32(addr, new_value);
     reg_write(rd, old_value);
 }
 

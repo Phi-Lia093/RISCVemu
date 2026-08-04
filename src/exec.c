@@ -596,17 +596,24 @@ exec(uint32_t ins)
                 case 0x105: // wfi
                     ins_wfi();
                     break;
-                case 0x009: // sfence.vma
-                    ins_sfence_vma();
-                    break;
 #endif
                 default:
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+                    // sfence.vma has funct7 == 0x09 in bits[31:25]; its imm
+                    // field is (0x09 << 5) | rs2, i.e. 0x120 when rs2 == 0.
+                    if (funct7 == 0b0001001)
+                    {
+                        ins_sfence_vma();
+                        break;
+                    }
+#endif
                     fatal("illegal system instruction imm=0x%x", imm);
                 }
             }
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
-            else if (imm == 0x009)
+            else if (funct7 == 0b0001001)
             {
+                // sfence.vma with a nonzero rs1 operand (rd must still be 0).
                 if (rd != 0)
                 {
                     fatal("sfence.vma: rd must be 0, got rd=%d", rd);

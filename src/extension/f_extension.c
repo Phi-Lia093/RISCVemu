@@ -28,6 +28,7 @@
 #include <extension/f_extension.h>
 #include <logger.h>
 #include <mem.h>
+#include <mmu.h>
 #include <softfloat.h>
 
 #define RISCV_CANONICAL_NAN_H 0x7E00u
@@ -1267,7 +1268,7 @@ insf_flw(uint32_t imm, uint32_t rs1, uint32_t rd)
         val = misaligned_load32(addr);
     else
 #endif
-        val = mem_read32_unsigned(addr);
+        val = mmu_read32_unsigned(addr);
     fpr_write_s(rd, val);
 }
 
@@ -1281,7 +1282,7 @@ insf_fsw(uint32_t imm, uint32_t rs1, uint32_t rs2)
         misaligned_store32(addr, val);
     else
 #endif
-        mem_write32(addr, val);
+        mmu_write32(addr, val);
 }
 
 void
@@ -1292,7 +1293,7 @@ insf_fld(uint32_t imm, uint32_t rs1, uint32_t rd)
 #ifdef CONFIG_SUPPORT_MISALIGN
     val = load64(addr);
 #else
-    val = mem_read64_unsigned(addr);
+    val = mmu_read64_unsigned(addr);
 #endif
     fpr_write_d(rd, val);
 }
@@ -1305,7 +1306,7 @@ insf_fsd(uint32_t imm, uint32_t rs1, uint32_t rs2)
 #ifdef CONFIG_SUPPORT_MISALIGN
     store64(addr, val);
 #else
-    mem_write64(addr, val);
+    mmu_write64(addr, val);
 #endif
 }
 
@@ -1319,7 +1320,7 @@ insf_flh(uint32_t imm, uint32_t rs1, uint32_t rd)
         val = misaligned_load16(addr);
     else
 #endif
-        val = mem_read16_unsigned(addr);
+        val = mmu_read16_unsigned(addr);
     fpr_write_h(rd, val);
 }
 
@@ -1333,7 +1334,7 @@ insf_fsh(uint32_t imm, uint32_t rs1, uint32_t rs2)
         misaligned_store16(addr, val);
     else
 #endif
-        mem_write16(addr, val);
+        mmu_write16(addr, val);
 }
 
 void
@@ -1354,8 +1355,8 @@ insf_flq(uint32_t imm, uint32_t rs1, uint32_t rd)
     else
 #endif
     {
-        v.v[0] = mem_read64_unsigned(addr);
-        v.v[1] = mem_read64_unsigned(addr + 8);
+        v.v[0] = mmu_read64_unsigned(addr);
+        v.v[1] = mmu_read64_unsigned(addr + 8);
     }
     fpr_write_q(rd, &v);
 }
@@ -1377,8 +1378,8 @@ insf_fsq(uint32_t imm, uint32_t rs1, uint32_t rs2)
     else
 #endif
     {
-        mem_write64(addr, v.v[0]);
-        mem_write64(addr + 8, v.v[1]);
+        mmu_write64(addr, v.v[0]);
+        mmu_write64(addr + 8, v.v[1]);
     }
 }
 
