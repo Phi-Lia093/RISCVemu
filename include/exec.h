@@ -116,7 +116,8 @@ void exec(uint32_t ins);
 
 // The fetch PC of the most recently completed (pre-fetch) instruction, used to
 // report the correct MEPC for a misaligned instruction-fetch trap (the trap is
-// attributed to the control-transfer instruction that produced the bad address).
+// attributed to the control-transfer instruction that produced the bad
+// address).
 extern uint32_t g_prev_ins_pc;
 
 #endif

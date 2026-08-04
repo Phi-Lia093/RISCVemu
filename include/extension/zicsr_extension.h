@@ -30,49 +30,49 @@
 #include <logger.h>
 #include <stdint.h>
 
-#define CSR_MSTATUS   0x300
-#define CSR_MISA      0x301
-#define CSR_MEDELEG   0x302
-#define CSR_MIDELEG   0x303
-#define CSR_MIE       0x304
-#define CSR_MTVEC     0x305
+#define CSR_MSTATUS 0x300
+#define CSR_MISA 0x301
+#define CSR_MEDELEG 0x302
+#define CSR_MIDELEG 0x303
+#define CSR_MIE 0x304
+#define CSR_MTVEC 0x305
 #define CSR_MCOUNTEREN 0x306
 
-#define CSR_MSCRATCH  0x340
-#define CSR_MEPC      0x341
-#define CSR_MCAUSE    0x342
-#define CSR_MTVAL     0x343
-#define CSR_MIP       0x344
-#define CSR_MNSTATUS  0x744
+#define CSR_MSCRATCH 0x340
+#define CSR_MEPC 0x341
+#define CSR_MCAUSE 0x342
+#define CSR_MTVAL 0x343
+#define CSR_MIP 0x344
+#define CSR_MNSTATUS 0x744
 
 // Machine-mode counter/hang CSRs (writable in M-mode)
 #define CSR_MCOUNTINHIBIT 0x320
-#define CSR_MCYCLE        0xB00
-#define CSR_MCYCLEH       0xB80
-#define CSR_MINSTRET      0xB02
-#define CSR_MINSTRETH     0xB82
+#define CSR_MCYCLE 0xB00
+#define CSR_MCYCLEH 0xB80
+#define CSR_MINSTRET 0xB02
+#define CSR_MINSTRETH 0xB82
 
-#define CSR_CYCLE_LO  0xC00
-#define CSR_CYCLE_HI  0xC80
-#define CSR_TIME_LO   0xC01
-#define CSR_TIME_HI   0xC81
+#define CSR_CYCLE_LO 0xC00
+#define CSR_CYCLE_HI 0xC80
+#define CSR_TIME_LO 0xC01
+#define CSR_TIME_HI 0xC81
 #define CSR_INSTRET_LO 0xC02
 #define CSR_INSTRET_HI 0xC82
 
-#define CSR_PMPCFG0   0x3A0
-#define CSR_PMPCFG1   0x3A1
-#define CSR_PMPCFG2   0x3A2
-#define CSR_PMPCFG3   0x3A3
-#define CSR_PMPADDR0  0x3B0
-#define CSR_PMPADDR1  0x3B1
-#define CSR_PMPADDR2  0x3B2
-#define CSR_PMPADDR3  0x3B3
-#define CSR_PMPADDR4  0x3B4
-#define CSR_PMPADDR5  0x3B5
-#define CSR_PMPADDR6  0x3B6
-#define CSR_PMPADDR7  0x3B7
-#define CSR_PMPADDR8  0x3B8
-#define CSR_PMPADDR9  0x3B9
+#define CSR_PMPCFG0 0x3A0
+#define CSR_PMPCFG1 0x3A1
+#define CSR_PMPCFG2 0x3A2
+#define CSR_PMPCFG3 0x3A3
+#define CSR_PMPADDR0 0x3B0
+#define CSR_PMPADDR1 0x3B1
+#define CSR_PMPADDR2 0x3B2
+#define CSR_PMPADDR3 0x3B3
+#define CSR_PMPADDR4 0x3B4
+#define CSR_PMPADDR5 0x3B5
+#define CSR_PMPADDR6 0x3B6
+#define CSR_PMPADDR7 0x3B7
+#define CSR_PMPADDR8 0x3B8
+#define CSR_PMPADDR9 0x3B9
 #define CSR_PMPADDR10 0x3BA
 #define CSR_PMPADDR11 0x3BB
 #define CSR_PMPADDR12 0x3BC
@@ -80,20 +80,20 @@
 #define CSR_PMPADDR14 0x3BE
 #define CSR_PMPADDR15 0x3BF
 
-#define CSR_SSTATUS  0x100
-#define CSR_SIE      0x104
-#define CSR_STVEC    0x105
+#define CSR_SSTATUS 0x100
+#define CSR_SIE 0x104
+#define CSR_STVEC 0x105
 #define CSR_SSCRATCH 0x140
-#define CSR_SEPC     0x141
-#define CSR_SCAUSE   0x142
-#define CSR_STVAL    0x143
-#define CSR_SIP      0x144
-#define CSR_SATP     0x180
+#define CSR_SEPC 0x141
+#define CSR_SCAUSE 0x142
+#define CSR_STVAL 0x143
+#define CSR_SIP 0x144
+#define CSR_SATP 0x180
 
-#define CSR_MVENDORID  0xF11
-#define CSR_MARCHID    0xF12
-#define CSR_MIMPID     0xF13
-#define CSR_MHARTID    0xF14
+#define CSR_MVENDORID 0xF11
+#define CSR_MARCHID 0xF12
+#define CSR_MIMPID 0xF13
+#define CSR_MHARTID 0xF14
 #define CSR_MCONFIGPTR 0xF15
 
 #define RW 1

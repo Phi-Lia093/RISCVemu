@@ -41,32 +41,96 @@ struct csr_operation csr_table[4096] = { 0 };
 // CSR Callback Functions - Machine Information Registers
 // ============================================================================
 
-static uint32_t get_mvendorid(void) { return 0x0; }
-static uint32_t get_marchid(void) { return 0x1; } // RV32G (lower 32 bits)
-static uint32_t get_mimpid(void) { return 0x0; }
-static uint32_t get_mhartid(void) { return 0; }
+static uint32_t
+get_mvendorid(void)
+{
+    return 0x0;
+}
+static uint32_t
+get_marchid(void)
+{
+    return 0x1;
+} // RV32G (lower 32 bits)
+static uint32_t
+get_mimpid(void)
+{
+    return 0x0;
+}
+static uint32_t
+get_mhartid(void)
+{
+    return 0;
+}
 
 // ============================================================================
 // CSR Callback Functions - Machine Trap Setup
 // ============================================================================
 
-static uint32_t get_misa(void) { return csr_table[CSR_MISA].value; } // RW-ish (WARL)
-static uint32_t get_meideleg(void) { return csr_table[CSR_MEDELEG].value; }
-static uint32_t get_mideleg(void) { return csr_table[CSR_MIDELEG].value; }
-static uint32_t get_mie(void) { return csr_table[CSR_MIE].value; }
-static uint32_t get_mtvec(void) { return csr_table[CSR_MTVEC].value; }
-static uint32_t get_mcounteren(void) { return csr_table[CSR_MCOUNTEREN].value; }
+static uint32_t
+get_misa(void)
+{
+    return csr_table[CSR_MISA].value;
+} // RW-ish (WARL)
+static uint32_t
+get_meideleg(void)
+{
+    return csr_table[CSR_MEDELEG].value;
+}
+static uint32_t
+get_mideleg(void)
+{
+    return csr_table[CSR_MIDELEG].value;
+}
+static uint32_t
+get_mie(void)
+{
+    return csr_table[CSR_MIE].value;
+}
+static uint32_t
+get_mtvec(void)
+{
+    return csr_table[CSR_MTVEC].value;
+}
+static uint32_t
+get_mcounteren(void)
+{
+    return csr_table[CSR_MCOUNTEREN].value;
+}
 
 // ============================================================================
 // CSR Callback Functions - Machine Trap Handling
 // ============================================================================
 
-static uint32_t get_mscratch(void) { return csr_table[CSR_MSCRATCH].value; }
-static uint32_t get_mepc(void) { return csr_table[CSR_MEPC].value; }
-static uint32_t get_mcause(void) { return csr_table[CSR_MCAUSE].value; }
-static uint32_t get_mtval(void) { return csr_table[CSR_MTVAL].value; }
-static uint32_t get_mip(void) { return csr_table[CSR_MIP].value; }
-static uint32_t get_mnstatus(void) { return csr_table[CSR_MNSTATUS].value; }
+static uint32_t
+get_mscratch(void)
+{
+    return csr_table[CSR_MSCRATCH].value;
+}
+static uint32_t
+get_mepc(void)
+{
+    return csr_table[CSR_MEPC].value;
+}
+static uint32_t
+get_mcause(void)
+{
+    return csr_table[CSR_MCAUSE].value;
+}
+static uint32_t
+get_mtval(void)
+{
+    return csr_table[CSR_MTVAL].value;
+}
+static uint32_t
+get_mip(void)
+{
+    return csr_table[CSR_MIP].value;
+}
+static uint32_t
+get_mnstatus(void)
+{
+    return csr_table[CSR_MNSTATUS].value;
+}
 
 // ============================================================================
 // CSR Callback Functions - Machine Counters
@@ -78,26 +142,82 @@ static uint32_t get_mnstatus(void) { return csr_table[CSR_MNSTATUS].value; }
 // CSR Callback Functions - Physical Memory Protection
 // ============================================================================
 
-static uint32_t get_pmpcfg(void) { return csr_table[CSR_PMPCFG0].value; }
-static uint32_t get_pmpaddr(void) { return csr_table[CSR_PMPADDR0].value; }
-static void set_pmpcfg(uint32_t val) { csr_table[CSR_PMPCFG0].value = val; }
-static void set_pmpaddr(uint32_t val) { csr_table[CSR_PMPADDR0].value = val; }
+static uint32_t
+get_pmpcfg(void)
+{
+    return csr_table[CSR_PMPCFG0].value;
+}
+static uint32_t
+get_pmpaddr(void)
+{
+    return csr_table[CSR_PMPADDR0].value;
+}
+static void
+set_pmpcfg(uint32_t val)
+{
+    csr_table[CSR_PMPCFG0].value = val;
+}
+static void
+set_pmpaddr(uint32_t val)
+{
+    csr_table[CSR_PMPADDR0].value = val;
+}
 
 // ============================================================================
 // CSR Callback Functions - Machine Trap Handling (Setters)
 // ============================================================================
 
-static void set_meideleg(uint32_t val) { csr_table[CSR_MEDELEG].value = val; }
-static void set_mideleg(uint32_t val) { csr_table[CSR_MIDELEG].value = val; }
-static void set_mie(uint32_t val) { csr_table[CSR_MIE].value = val; }
-static void set_mtvec(uint32_t val) { csr_table[CSR_MTVEC].value = val; }
-static void set_mcounteren(uint32_t val) { csr_table[CSR_MCOUNTEREN].value = val; }
+static void
+set_meideleg(uint32_t val)
+{
+    csr_table[CSR_MEDELEG].value = val;
+}
+static void
+set_mideleg(uint32_t val)
+{
+    csr_table[CSR_MIDELEG].value = val;
+}
+static void
+set_mie(uint32_t val)
+{
+    csr_table[CSR_MIE].value = val;
+}
+static void
+set_mtvec(uint32_t val)
+{
+    csr_table[CSR_MTVEC].value = val;
+}
+static void
+set_mcounteren(uint32_t val)
+{
+    csr_table[CSR_MCOUNTEREN].value = val;
+}
 
-static void set_mscratch(uint32_t val) { csr_table[CSR_MSCRATCH].value = val; }
-static void set_mepc(uint32_t val) { csr_table[CSR_MEPC].value = val; }
-static void set_mcause(uint32_t val) { csr_table[CSR_MCAUSE].value = val; }
-static void set_mtval(uint32_t val) { csr_table[CSR_MTVAL].value = val; }
-static void set_mip(uint32_t val) { csr_table[CSR_MIP].value = val; }
+static void
+set_mscratch(uint32_t val)
+{
+    csr_table[CSR_MSCRATCH].value = val;
+}
+static void
+set_mepc(uint32_t val)
+{
+    csr_table[CSR_MEPC].value = val;
+}
+static void
+set_mcause(uint32_t val)
+{
+    csr_table[CSR_MCAUSE].value = val;
+}
+static void
+set_mtval(uint32_t val)
+{
+    csr_table[CSR_MTVAL].value = val;
+}
+static void
+set_mip(uint32_t val)
+{
+    csr_table[CSR_MIP].value = val;
+}
 
 void
 init_csr_table(void)
@@ -154,27 +274,34 @@ init_csr_table(void)
 
     // Machine Trap Setup
     csr_table[CSR_MSTATUS]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, mstatus_read, mstatus_write };
-    csr_table[CSR_MISA]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0x40001100, get_misa, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE,  RW,
+                                  0, mstatus_read, mstatus_write };
+    csr_table[CSR_MISA] = (struct csr_operation){
+        1, PRV_MACHINE, RO, 0x40001100, get_misa, NULL
+    };
     csr_table[CSR_MEDELEG]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_meideleg, set_meideleg };
+        = (struct csr_operation){ 1, PRV_MACHINE,  RW,
+                                  0, get_meideleg, set_meideleg };
     csr_table[CSR_MIDELEG]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mideleg, set_mideleg };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW,
+                                  0, get_mideleg, set_mideleg };
     csr_table[CSR_MIE]
         = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mie, set_mie };
     csr_table[CSR_MTVEC]
         = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mtvec, set_mtvec };
     csr_table[CSR_MCOUNTEREN]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0xFFFFFFFF, get_mcounteren, set_mcounteren };
+        = (struct csr_operation){ 1,          PRV_MACHINE,    RW,
+                                  0xFFFFFFFF, get_mcounteren, set_mcounteren };
 
     // Machine Trap Handling
     csr_table[CSR_MSCRATCH]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mscratch, set_mscratch };
+        = (struct csr_operation){ 1, PRV_MACHINE,  RW,
+                                  0, get_mscratch, set_mscratch };
     csr_table[CSR_MEPC]
         = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mepc, set_mepc };
-    csr_table[CSR_MCAUSE]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mcause, set_mcause };
+    csr_table[CSR_MCAUSE] = (struct csr_operation){
+        1, PRV_MACHINE, RW, 0, get_mcause, set_mcause
+    };
     csr_table[CSR_MTVAL]
         = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mtval, set_mtval };
     csr_table[CSR_MIP]
@@ -184,17 +311,23 @@ init_csr_table(void)
 
     // Machine Counters
     csr_table[CSR_CYCLE_LO]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_cycle_l, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE,        RO,
+                                  0, get_zicntr_cycle_l, NULL };
     csr_table[CSR_CYCLE_HI]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_cycle_h, NULL };
-    csr_table[CSR_TIME_LO]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_time_l, NULL };
-    csr_table[CSR_TIME_HI]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_time_h, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE,        RO,
+                                  0, get_zicntr_cycle_h, NULL };
+    csr_table[CSR_TIME_LO] = (struct csr_operation){
+        1, PRV_MACHINE, RO, 0, get_zicntr_time_l, NULL
+    };
+    csr_table[CSR_TIME_HI] = (struct csr_operation){
+        1, PRV_MACHINE, RO, 0, get_zicntr_time_h, NULL
+    };
     csr_table[CSR_INSTRET_LO]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_instret_l, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE,          RO,
+                                  0, get_zicntr_instret_l, NULL };
     csr_table[CSR_INSTRET_HI]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_instret_h, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE,          RO,
+                                  0, get_zicntr_instret_h, NULL };
 
     // Writable machine counter/hang CSRs (mcountinhibit, mcycle, minstret)
     // Register as RW so M-mode writes take effect (rv32mi/instret_overflow.S).
@@ -206,26 +339,31 @@ init_csr_table(void)
         = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
     // minstret/minstreth: writable aliases of the live instret counter. Writing
     // suppresses the architecturally-incrementing counter for that instruction.
-    csr_table[CSR_MINSTRET]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_zicntr_instret_l,
-                                  set_zicntr_minstret_l };
-    csr_table[CSR_MINSTRETH]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_zicntr_instret_h,
-                                  set_zicntr_minstret_h };
+    csr_table[CSR_MINSTRET] = (struct csr_operation){
+        1, PRV_MACHINE, RW, 0, get_zicntr_instret_l, set_zicntr_minstret_l
+    };
+    csr_table[CSR_MINSTRETH] = (struct csr_operation){
+        1, PRV_MACHINE, RW, 0, get_zicntr_instret_h, set_zicntr_minstret_h
+    };
 
     // Physical Memory Protection
-    csr_table[CSR_PMPCFG0]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg };
-    csr_table[CSR_PMPCFG1]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg };
-    csr_table[CSR_PMPCFG2]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg };
-    csr_table[CSR_PMPCFG3]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg };
+    csr_table[CSR_PMPCFG0] = (struct csr_operation){
+        1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg
+    };
+    csr_table[CSR_PMPCFG1] = (struct csr_operation){
+        1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg
+    };
+    csr_table[CSR_PMPCFG2] = (struct csr_operation){
+        1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg
+    };
+    csr_table[CSR_PMPCFG3] = (struct csr_operation){
+        1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg
+    };
     for (int i = 0; i < 16; i++)
     {
         csr_table[CSR_PMPADDR0 + i]
-            = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_pmpaddr, set_pmpaddr };
+            = (struct csr_operation){ 1, PRV_MACHINE, RW,
+                                      0, get_pmpaddr, set_pmpaddr };
     }
 
     // Supervisor Trap Setup
@@ -343,4 +481,3 @@ ins_zicsr_csrrci(uint32_t uimm, uint32_t rd, uint32_t csr, uint32_t ins)
 }
 
 #endif // CONFIG_ENABLE_ZICSR_EXTENSION
-

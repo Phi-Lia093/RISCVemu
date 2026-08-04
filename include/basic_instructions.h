@@ -485,9 +485,15 @@ insi_i_ecall(void)
     uint32_t cause;
     switch (g_state.privilege)
     {
-    case PRV_SUPERVISOR: cause = CAUSE_SUPERVISOR_ECALL; break;
-    case PRV_MACHINE:    cause = CAUSE_MACHINE_ECALL;    break;
-    default:             cause = CAUSE_USER_ECALL;       break;
+    case PRV_SUPERVISOR:
+        cause = CAUSE_SUPERVISOR_ECALL;
+        break;
+    case PRV_MACHINE:
+        cause = CAUSE_MACHINE_ECALL;
+        break;
+    default:
+        cause = CAUSE_USER_ECALL;
+        break;
     }
     raise_exception(cause, 0);
 #else
