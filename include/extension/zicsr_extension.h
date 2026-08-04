@@ -52,6 +52,12 @@
 #define CSR_MINSTRET 0xB02
 #define CSR_MINSTRETH 0xB82
 
+// Sdtrig trigger CSRs (M-mode debug triggers)
+#define CSR_TSELECT 0x7A0
+#define CSR_TDATA1 0x7A1
+#define CSR_TDATA2 0x7A2
+#define CSR_TCONTROL 0x7A5
+
 #define CSR_CYCLE_LO 0xC00
 #define CSR_CYCLE_HI 0xC80
 #define CSR_TIME_LO 0xC01

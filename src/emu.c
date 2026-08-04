@@ -36,6 +36,7 @@
 #include <config.h>
 
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+#include <extension/sdtrig_extension.h>
 #include <extension/system.h>
 #include <extension/zicsr_extension.h>
 #endif
@@ -256,7 +257,13 @@ main(int argc, char **argv)
         uint32_t fetch_pc = g_state.pc;
         uint32_t ins = mem_read32_unsigned(fetch_pc);
         g_prev_ins_pc = last_fetch_pc;
-        exec(ins);
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+        // Sdtrig execute (fetch) breakpoint. raise_exception() below sets pc to
+        // the trap vector; the subsequent pc += 4 resumes there, and the trap
+        // is attributed to the fetch PC via MEPC.
+        if (!sdtrig_check_fetch_trigger(fetch_pc))
+#endif
+            exec(ins);
         last_fetch_pc = fetch_pc;
         g_state.pc += 4;
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
@@ -318,7 +325,10 @@ main(int argc, char **argv)
         uint32_t fetch_pc = g_state.pc;
         uint32_t ins = mem_read32_unsigned(fetch_pc);
         g_prev_ins_pc = last_fetch_pc;
-        exec(ins);
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+        if (!sdtrig_check_fetch_trigger(fetch_pc))
+#endif
+            exec(ins);
         last_fetch_pc = fetch_pc;
         g_state.pc += 4;
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION

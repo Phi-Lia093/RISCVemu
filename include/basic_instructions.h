@@ -29,6 +29,9 @@
 #include <config.h>
 #include <exec.h>
 #include <extension/system.h>
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+#include <extension/sdtrig_extension.h>
+#endif
 
 #define PC_BACKWARD g_state.pc -= 4 // in main loop we always pc+=4
 
@@ -184,6 +187,9 @@ static inline void
 insi_i_lb(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    if (sdtrig_check_load_trigger(addr)) return;
+#endif
     int32_t val = mem_read8_signed(addr);
     reg_write(rd, (uint32_t)val);
 }
@@ -192,6 +198,9 @@ static inline void
 insi_i_lh(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    if (sdtrig_check_load_trigger(addr)) return;
+#endif
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(addr & 0x1))
     {
@@ -214,6 +223,9 @@ static inline void
 insi_i_lw(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    if (sdtrig_check_load_trigger(addr)) return;
+#endif
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(addr & 0x3))
     {
@@ -236,6 +248,9 @@ static inline void
 insi_i_lbu(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    if (sdtrig_check_load_trigger(addr)) return;
+#endif
     uint32_t val = mem_read8_unsigned(addr);
     reg_write(rd, val);
 }
@@ -244,6 +259,9 @@ static inline void
 insi_i_lhu(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    if (sdtrig_check_load_trigger(addr)) return;
+#endif
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(addr & 0x1))
     {
@@ -285,6 +303,9 @@ static inline void
 insi_s_sb(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     uint32_t addr = reg_read(rs1) + imm;
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    if (sdtrig_check_store_trigger(addr)) return;
+#endif
     uint32_t val = reg_read(rs2);
     mem_write8(addr, (uint8_t)(val & 0xFF));
 }
@@ -293,6 +314,9 @@ static inline void
 insi_s_sh(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     uint32_t addr = reg_read(rs1) + imm;
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    if (sdtrig_check_store_trigger(addr)) return;
+#endif
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(addr & 0x1))
     {
@@ -315,6 +339,9 @@ static inline void
 insi_s_sw(uint32_t imm, uint32_t rs2, uint32_t rs1)
 {
     uint32_t addr = reg_read(rs1) + imm;
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    if (sdtrig_check_store_trigger(addr)) return;
+#endif
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(addr & 0x3))
     {

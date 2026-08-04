@@ -34,6 +34,10 @@
 #endif
 
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+#include <extension/sdtrig_extension.h>
+#endif
+
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
 
 struct csr_operation csr_table[4096] = { 0 };
 
@@ -231,6 +235,9 @@ init_csr_table(void)
         csr_table[i].read_callback = NULL;
         csr_table[i].write_callback = NULL;
     }
+
+    // Sdtrig debug-trigger CSRs (tselect/tdata1/tdata2/tcontrol).
+    init_sdtrig_csr_table();
 
 #ifdef CONFIG_ENABLE_F_EXTENSION
     csr_table[CSR_FCSR]
