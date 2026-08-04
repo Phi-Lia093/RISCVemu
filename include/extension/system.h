@@ -84,6 +84,10 @@ uint32_t sstatus_read(void);
 void sstatus_write(uint32_t val);
 
 void raise_exception(uint32_t cause, uint32_t tval);
+// Like raise_exception but reports `epc` as the trapping instruction address
+// (MEPC/SEPC), e.g. for a misaligned fetch the trap is attributed to the
+// control-transfer instruction that produced the bad address.
+void raise_exception_pc(uint32_t cause, uint32_t tval, uint32_t epc);
 void raise_supervisor_interrupt(uint32_t irq);
 void raise_interrupt(uint32_t irq);
 void handle_trap(void);
@@ -104,6 +108,21 @@ void check_and_handle_interrupts(void);
 #define CAUSE_FETCH_PAGE_FAULT 12
 #define CAUSE_LOAD_PAGE_FAULT 13
 #define CAUSE_STORE_PAGE_FAULT 15
+
+// Raise a misaligned-instruction-fetch trap if `target_addr` is not fetchable
+// under the current IALIGN (2 bytes when misa.C, else 4 bytes). The trap is
+// attributed (MEPC) to the current instruction and mtval = the bad address.
+// Returns nonzero if a trap was raised.
+static inline int
+raise_if_misaligned_fetch(uint32_t target_addr)
+{
+    if ((target_addr & (misa_c_enabled() ? 1U : 3U)) != 0)
+    {
+        raise_exception_pc(CAUSE_MISALIGNED_FETCH, target_addr, g_state.pc);
+        return 1;
+    }
+    return 0;
+}
 
 #endif // CONFIG_ENABLE_SYSTEM
 

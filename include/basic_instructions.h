@@ -266,7 +266,15 @@ static inline void
 insi_i_jalr(uint32_t imm, uint32_t rs1, uint32_t rd)
 {
     uint32_t addr = reg_read(rs1) + imm;
-    addr = addr & ~1;
+    addr = addr & ~1; // JALR ignores the target LSB
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    // A JALR to a misaligned target (after LSB masking) raises an immediate
+    // misaligned-fetch trap, matching riscv-tests rv32mi/ma_fetch.
+    if (raise_if_misaligned_fetch(addr))
+    {
+        return;
+    }
+#endif
 
     reg_write(rd, g_state.pc + 4);
     g_state.pc = addr;
@@ -332,6 +340,12 @@ insi_b_beq(uint32_t imm, uint32_t rs2, uint32_t rs1)
     uint32_t v2 = reg_read(rs2);
     if (likely(v1 == v2))
     {
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+        if (raise_if_misaligned_fetch(g_state.pc + imm))
+        {
+            return;
+        }
+#endif
         g_state.pc += imm;
         PC_BACKWARD;
     }
@@ -344,6 +358,12 @@ insi_b_bne(uint32_t imm, uint32_t rs2, uint32_t rs1)
     uint32_t v2 = reg_read(rs2);
     if (likely(v1 != v2))
     {
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+        if (raise_if_misaligned_fetch(g_state.pc + imm))
+        {
+            return;
+        }
+#endif
         g_state.pc += imm;
         PC_BACKWARD;
     }
@@ -356,6 +376,12 @@ insi_b_blt(uint32_t imm, uint32_t rs2, uint32_t rs1)
     int32_t v2 = (int32_t)reg_read(rs2);
     if (likely(v1 < v2))
     {
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+        if (raise_if_misaligned_fetch(g_state.pc + imm))
+        {
+            return;
+        }
+#endif
         g_state.pc += imm;
         PC_BACKWARD;
     }
@@ -368,6 +394,12 @@ insi_b_bge(uint32_t imm, uint32_t rs2, uint32_t rs1)
     int32_t v2 = (int32_t)reg_read(rs2);
     if (likely(v1 >= v2))
     {
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+        if (raise_if_misaligned_fetch(g_state.pc + imm))
+        {
+            return;
+        }
+#endif
         g_state.pc += imm;
         PC_BACKWARD;
     }
@@ -380,6 +412,12 @@ insi_b_bltu(uint32_t imm, uint32_t rs2, uint32_t rs1)
     uint32_t v2 = reg_read(rs2);
     if (likely(v1 < v2))
     {
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+        if (raise_if_misaligned_fetch(g_state.pc + imm))
+        {
+            return;
+        }
+#endif
         g_state.pc += imm;
         PC_BACKWARD;
     }
@@ -392,6 +430,12 @@ insi_b_bgeu(uint32_t imm, uint32_t rs2, uint32_t rs1)
     uint32_t v2 = reg_read(rs2);
     if (likely(v1 >= v2))
     {
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+        if (raise_if_misaligned_fetch(g_state.pc + imm))
+        {
+            return;
+        }
+#endif
         g_state.pc += imm;
         PC_BACKWARD;
     }
@@ -412,6 +456,13 @@ insi_u_auipc(uint32_t imm, uint32_t rd)
 static inline void
 insi_j_jal(uint32_t imm, uint32_t rd)
 {
+    uint32_t target = g_state.pc + imm;
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    if (raise_if_misaligned_fetch(target))
+    {
+        return;
+    }
+#endif
     reg_write(rd, g_state.pc + 4);
     g_state.pc += imm;
     PC_BACKWARD;

@@ -85,6 +85,8 @@ static void (*m_ins_optable[8][128])(uint32_t, uint32_t, uint32_t) = {
 };
 #endif
 
+uint32_t g_prev_ins_pc = 0;
+
 void
 exec(uint32_t ins)
 {
@@ -94,6 +96,18 @@ exec(uint32_t ins)
     uint32_t rs1 = get_rs1(ins);
     uint32_t rs2 = get_rs2(ins);
     uint32_t rd = get_rd(ins);
+
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    // Instruction-fetch alignment (IALIGN): 2 bytes if misa.C is set (RVC),
+    // otherwise 4 bytes. A misaligned fetch raises CAUSE_MISALIGNED_FETCH.
+    if ((g_state.pc & (misa_c_enabled() ? 1U : 3U)) != 0)
+    {
+        // mtval = the misaligned fetch address; MEPC = the control-transfer
+        // instruction whose target was misaligned (spike-compatible).
+        raise_exception_pc(CAUSE_MISALIGNED_FETCH, g_state.pc, g_prev_ins_pc);
+        return;
+    }
+#endif
 
 // Compressed (RVC) instructions: only legal when misa.C is set and the
 // address is 2-byte aligned. The riscv-tests M-mode programs enable C only

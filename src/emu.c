@@ -224,6 +224,7 @@ main(int argc, char **argv)
     for (int i = 0; i < 8; i++) loop_window[i] = 0;
     uint32_t loop_window_pos = 0;
     int spin_count = 0;
+    uint32_t last_fetch_pc = 0;
 
 #ifdef CONFIG_ENABLE_DEBUGGER
     while (!g_state.terminated)
@@ -253,8 +254,9 @@ main(int argc, char **argv)
 
         uint32_t fetch_pc = g_state.pc;
         uint32_t ins = mem_read32_unsigned(fetch_pc);
-        fprintf(stderr, "FX 0x%08x\n", fetch_pc);
+        g_prev_ins_pc = last_fetch_pc;
         exec(ins);
+        last_fetch_pc = fetch_pc;
         g_state.pc += 4;
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
         cycle++;
@@ -304,8 +306,9 @@ main(int argc, char **argv)
 
         uint32_t fetch_pc = g_state.pc;
         uint32_t ins = mem_read32_unsigned(fetch_pc);
-        fprintf(stderr, "FX 0x%08x\n", fetch_pc);
+        g_prev_ins_pc = last_fetch_pc;
         exec(ins);
+        last_fetch_pc = fetch_pc;
         g_state.pc += 4;
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
         cycle++;

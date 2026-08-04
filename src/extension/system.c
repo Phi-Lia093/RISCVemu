@@ -170,11 +170,17 @@ static void raise_supervisor_interrupt_internal(uint32_t irq, uint32_t pc);
 void
 raise_exception(uint32_t cause, uint32_t tval)
 {
+    raise_exception_pc(cause, tval, g_state.pc);
+}
+
+void
+raise_exception_pc(uint32_t cause, uint32_t tval, uint32_t epc)
+{
     uint32_t current_privilege = g_state.privilege;
     uint32_t pc = g_state.pc;
 
-    warn("Exception: cause=%d, tval=0x%08X, pc=0x%08X, priv=%d", cause, tval,
-         pc, current_privilege);
+    warn("Exception: cause=%d, tval=0x%08X, pc=0x%08X, epc=0x%08X, priv=%d",
+         cause, tval, pc, epc, current_privilege);
 
     bool delegate_to_s = false;
 
@@ -195,11 +201,11 @@ raise_exception(uint32_t cause, uint32_t tval)
 
     if (delegate_to_s)
     {
-        raise_supervisor_exception(cause, tval, pc);
+        raise_supervisor_exception(cause, tval, epc);
     }
     else
     {
-        raise_machine_exception(cause, tval, pc);
+        raise_machine_exception(cause, tval, epc);
     }
 }
 
