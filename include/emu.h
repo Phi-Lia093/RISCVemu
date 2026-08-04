@@ -49,6 +49,7 @@ struct machine_state
     int single_step;
     uint32_t breakpoint;
     uint32_t breakpoint_enabled;
+    int break_requested; // set by the SIGINT handler to break into the debugger
 #endif
     uint32_t privilege;
     int just_trapped;

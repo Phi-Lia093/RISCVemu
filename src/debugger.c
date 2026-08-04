@@ -19,6 +19,7 @@
  */
 
 #include <ctype.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -79,11 +80,34 @@ static void cmd_fdump(char *args);
 static void cmd_frm(void);
 #endif
 
+static void
+handle_sigint(int sig)
+{
+    (void)sig;
+    // Request the run loop to break into the debugger at the next instruction
+    // boundary. Only flags are touched here because this runs in a signal
+    // context where only async-signal-safe operations are guaranteed.
+    g_state.break_requested = 1;
+    g_state.single_step = 1;
+}
+
 void
 init_debugger(void)
 {
     last_cmd[0] = '\0';
     show_disasm = 1;
+    g_state.break_requested = 0;
+
+    // Intercept ^C: instead of terminating the emulator, break into the
+    // interactive debugger (stop execution and prompt "DEBUG>"). SA_RESTART is
+    // set so that a ^C pressed while blocked on fgets at the prompt does not
+    // make fgets return EOF.
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    sigaction(SIGINT, &sa, NULL);
 }
 
 static void

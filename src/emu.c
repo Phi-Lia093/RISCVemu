@@ -247,6 +247,12 @@ main(int argc, char **argv)
             g_state.breakpoint_enabled = 0;
         }
 
+        if (g_state.break_requested)
+        {
+            g_state.break_requested = 0;
+            printf("Received SIGINT, entering debugger.\n");
+        }
+
         if (g_state.single_step)
         {
             tick_debugger();
