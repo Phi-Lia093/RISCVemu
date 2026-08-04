@@ -18,7 +18,7 @@ option(CONFIG_SUPPORT_MISALIGN "Support misaligned memory access (slower)" ON)
 
 option(CONFIG_ENABLE_M_EXTENSION "M Extension: Integer Multiplication/Division" ON)
 option(CONFIG_ENABLE_A_EXTENSION "A Extension: Atomic Operations (LR/SC/AMO)" ON)
-option(CONFIG_ENABLE_C_EXTENSION "C Extension: 16-bit Compressed Instructions" OFF)
+option(CONFIG_ENABLE_C_EXTENSION "C Extension: 16-bit Compressed Instructions" ON)
 option(CONFIG_ENABLE_F_EXTENSION "F Extension: Single-Precision FPU (requires Zicsr)" ON)
 option(CONFIG_ENABLE_D_EXTENSION "D Extension: Double-Precision FPU (requires F)" ON)
 option(CONFIG_ENABLE_Q_EXTENSION "Q Extension: Quad-Precision FPU (requires D)" ON)

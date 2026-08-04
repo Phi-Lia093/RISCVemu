@@ -22,6 +22,8 @@
 #include <extension/system.h>
 #include <extension/zicsr_extension.h>
 #include <logger.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include <config.h>
 
@@ -214,6 +216,9 @@ raise_machine_exception(uint32_t cause, uint32_t tval, uint32_t pc)
     g_state.privilege = PRV_MACHINE;
 
     uint32_t mtvec = csr_read(CSR_MTVEC);
+    if (getenv("TRACE_PC"))
+        fprintf(stderr, "TRAP cause=%u mtvec=0x%08x mepc=0x%08x\n", cause,
+                mtvec, pc);
     g_state.pc = (mtvec & ~0x3) - 4;
 }
 

@@ -219,6 +219,14 @@ exec(uint32_t ins)
             break;
 
         case 1: // SLLI
+            // In RV32, SLLI requires funct7 == 0. A nonzero funct7 (e.g. the
+            // illegal shamt[5] set, as in rv32mi/shamt.S) is an illegal
+            // instruction.
+            if (unlikely(funct7 != 0b0000000))
+            {
+                raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins);
+                break;
+            }
             insi_i_slli(shamt, rs1, rd);
             break;
 
@@ -606,32 +614,32 @@ exec(uint32_t ins)
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
         case 0b001: // CSRRW
         {
-            ins_zicsr_csrrw(rs1, rd, csr);
+            ins_zicsr_csrrw(rs1, rd, csr, ins);
             break;
         }
         case 0b010: // CSRRS
         {
-            ins_zicsr_csrrs(rs1, rd, csr);
+            ins_zicsr_csrrs(rs1, rd, csr, ins);
             break;
         }
         case 0b011: // CSRRC
         {
-            ins_zicsr_csrrc(rs1, rd, csr);
+            ins_zicsr_csrrc(rs1, rd, csr, ins);
             break;
         }
         case 0b101: // CSRRWI
         {
-            ins_zicsr_csrrwi(rs1, rd, csr);
+            ins_zicsr_csrrwi(rs1, rd, csr, ins);
             break;
         }
         case 0b110: // CSRRSI
         {
-            ins_zicsr_csrrsi(rs1, rd, csr);
+            ins_zicsr_csrrsi(rs1, rd, csr, ins);
             break;
         }
         case 0b111: // CSRRCI
         {
-            ins_zicsr_csrrci(rs1, rd, csr);
+            ins_zicsr_csrrci(rs1, rd, csr, ins);
             break;
         }
 #endif

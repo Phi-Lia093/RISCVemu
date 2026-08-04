@@ -25,6 +25,7 @@
 #include <time.h>
 
 uint64_t cycle = 0;
+uint64_t instret = 0;
 
 static inline uint64_t
 get_time()
@@ -56,6 +57,18 @@ uint32_t
 get_zicntr_time_h()
 {
     return (uint32_t)(get_time() >> 32);
+}
+
+uint32_t
+get_zicntr_instret_l()
+{
+    return (uint32_t)instret;
+}
+
+uint32_t
+get_zicntr_instret_h()
+{
+    return (uint32_t)(instret >> 32);
 }
 
 #endif // CONFIG_ENABLE_ZICNTR_EXTENSION

@@ -212,6 +212,13 @@ main(int argc, char **argv)
 
     info("starting execution at PC=0x%x", g_state.pc);
 
+    // Detect the riscv-test harness "write_tohost" spin loop (an unconditional
+    // jump to its own address after an ECALL was swallowed by the trap vector).
+    // We terminate so the CPU does not loop forever; x10/x17 already hold the
+    // pass/fail exit code from RVTEST_PASS/RVTEST_FAIL.
+    uint32_t prev_pc = 0;
+    uint32_t self_loop_count = 0;
+
 #ifdef CONFIG_ENABLE_DEBUGGER
     while (!g_state.terminated)
     {
@@ -238,11 +245,34 @@ main(int argc, char **argv)
             break;
         }
 
-        uint32_t ins = mem_read32_unsigned(g_state.pc);
+        uint32_t fetch_pc = g_state.pc;
+        uint32_t ins = mem_read32_unsigned(fetch_pc);
+        if (getenv("TRACE_PC"))
+            fprintf(stderr, "PC=0x%08x INS=0x%08x PRIV=%u\n", fetch_pc, ins,
+                    g_state.privilege);
         exec(ins);
         g_state.pc += 4;
+        // Unconditional self-jump (e.g. `j write_tohost`): same PC re-fetched.
+        if (g_state.pc == fetch_pc)
+        {
+            if (prev_pc == fetch_pc)
+            {
+                self_loop_count++;
+            }
+            prev_pc = fetch_pc;
+            if (self_loop_count >= 3)
+            {
+                g_state.terminated = 1;
+            }
+        }
+        else
+        {
+            prev_pc = 0;
+            self_loop_count = 0;
+        }
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
         cycle++;
+        instret++;
 #endif
     }
 #else
@@ -254,11 +284,34 @@ main(int argc, char **argv)
             break;
         }
 
-        uint32_t ins = mem_read32_unsigned(g_state.pc);
+        uint32_t fetch_pc = g_state.pc;
+        uint32_t ins = mem_read32_unsigned(fetch_pc);
+        if (getenv("TRACE_PC"))
+            fprintf(stderr, "PC=0x%08x INS=0x%08x PRIV=%u\n", fetch_pc, ins,
+                    g_state.privilege);
         exec(ins);
         g_state.pc += 4;
+        // Unconditional self-jump (e.g. `j write_tohost`): same PC re-fetched.
+        if (g_state.pc == fetch_pc)
+        {
+            if (prev_pc == fetch_pc)
+            {
+                self_loop_count++;
+            }
+            prev_pc = fetch_pc;
+            if (self_loop_count >= 3)
+            {
+                g_state.terminated = 1;
+            }
+        }
+        else
+        {
+            prev_pc = 0;
+            self_loop_count = 0;
+        }
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
         cycle++;
+        instret++;
 #endif
     }
 #endif

@@ -420,16 +420,41 @@ insi_j_jal(uint32_t imm, uint32_t rd)
 static inline void
 insi_i_ecall(void)
 {
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    // The riscv-tests harness signals pass/fail via `ecall` with a7 == 93
+    // (Linux exit syscall). In that case we terminate the emulator directly.
+    // Any other ecall raises the appropriate ECALL exception to the trap
+    // handler (scall.S / csr.S depend on this).
+    if (g_state.gpr[17] == 93)
+    {
+        info("ECALL instruction executed, Terminating...");
+        g_state.terminated = 1;
+        return;
+    }
+    uint32_t cause;
+    switch (g_state.privilege)
+    {
+    case PRV_SUPERVISOR: cause = CAUSE_SUPERVISOR_ECALL; break;
+    case PRV_MACHINE:    cause = CAUSE_MACHINE_ECALL;    break;
+    default:             cause = CAUSE_USER_ECALL;       break;
+    }
+    raise_exception(cause, 0);
+#else
     info("ECALL instruction executed, Terminating...");
     g_state.terminated = 1;
+#endif
 }
 
 static inline void
 insi_i_ebreak(void)
 {
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+    raise_exception(CAUSE_BREAKPOINT, 0);
+#else
     info("Stopped at EBREAK");
 #ifdef CONFIG_ENABLE_DEBUGGER
     g_state.single_step = 1;
+#endif
 #endif
 }
 

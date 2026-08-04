@@ -24,6 +24,8 @@
 #include <extension/system.h>
 #include <extension/zicsr_extension.h>
 #include <logger.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
 #include <extension/zicntr_extension.h>
@@ -36,6 +38,68 @@
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
 
 struct csr_operation csr_table[4096] = { 0 };
+
+// ============================================================================
+// CSR Callback Functions - Machine Information Registers
+// ============================================================================
+
+static uint32_t get_mvendorid(void) { return 0x0; }
+static uint32_t get_marchid(void) { return 0x1; } // RV32G (lower 32 bits)
+static uint32_t get_mimpid(void) { return 0x0; }
+static uint32_t get_mhartid(void) { return 0; }
+
+// ============================================================================
+// CSR Callback Functions - Machine Trap Setup
+// ============================================================================
+
+static uint32_t get_misa(void) { return csr_table[CSR_MISA].value; } // RW-ish (WARL)
+static uint32_t get_meideleg(void) { return csr_table[CSR_MEDELEG].value; }
+static uint32_t get_mideleg(void) { return csr_table[CSR_MIDELEG].value; }
+static uint32_t get_mie(void) { return csr_table[CSR_MIE].value; }
+static uint32_t get_mtvec(void) { return csr_table[CSR_MTVEC].value; }
+static uint32_t get_mcounteren(void) { return csr_table[CSR_MCOUNTEREN].value; }
+
+// ============================================================================
+// CSR Callback Functions - Machine Trap Handling
+// ============================================================================
+
+static uint32_t get_mscratch(void) { return csr_table[CSR_MSCRATCH].value; }
+static uint32_t get_mepc(void) { return csr_table[CSR_MEPC].value; }
+static uint32_t get_mcause(void) { return csr_table[CSR_MCAUSE].value; }
+static uint32_t get_mtval(void) { return csr_table[CSR_MTVAL].value; }
+static uint32_t get_mip(void) { return csr_table[CSR_MIP].value; }
+static uint32_t get_mnstatus(void) { return csr_table[CSR_MNSTATUS].value; }
+
+// ============================================================================
+// CSR Callback Functions - Machine Counters
+// ============================================================================
+
+// Note: get_zicntr_* functions are already declared in zicntr_extension.h
+
+// ============================================================================
+// CSR Callback Functions - Physical Memory Protection
+// ============================================================================
+
+static uint32_t get_pmpcfg(void) { return csr_table[CSR_PMPCFG0].value; }
+static uint32_t get_pmpaddr(void) { return csr_table[CSR_PMPADDR0].value; }
+static void set_pmpcfg(uint32_t val) { csr_table[CSR_PMPCFG0].value = val; }
+static void set_pmpaddr(uint32_t val) { csr_table[CSR_PMPADDR0].value = val; }
+
+// ============================================================================
+// CSR Callback Functions - Machine Trap Handling (Setters)
+// ============================================================================
+
+static void set_meideleg(uint32_t val) { csr_table[CSR_MEDELEG].value = val; }
+static void set_mideleg(uint32_t val) { csr_table[CSR_MIDELEG].value = val; }
+static void set_mie(uint32_t val) { csr_table[CSR_MIE].value = val; }
+static void set_mtvec(uint32_t val) { csr_table[CSR_MTVEC].value = val; }
+static void set_mcounteren(uint32_t val) { csr_table[CSR_MCOUNTEREN].value = val; }
+
+static void set_mscratch(uint32_t val) { csr_table[CSR_MSCRATCH].value = val; }
+static void set_mepc(uint32_t val) { csr_table[CSR_MEPC].value = val; }
+static void set_mcause(uint32_t val) { csr_table[CSR_MCAUSE].value = val; }
+static void set_mtval(uint32_t val) { csr_table[CSR_MTVAL].value = val; }
+static void set_mip(uint32_t val) { csr_table[CSR_MIP].value = val; }
 
 void
 init_csr_table(void)
@@ -66,7 +130,7 @@ init_csr_table(void)
     csr_table[CSR_TIME_LO]
         = (struct csr_operation){ 1, PRV_USER, RO, 0, get_zicntr_time_l, NULL };
     csr_table[CSR_INSTRET_LO] = (struct csr_operation){
-        1, PRV_USER, RO, 0, get_zicntr_cycle_l, NULL
+        1, PRV_USER, RO, 0, get_zicntr_instret_l, NULL
     };
 
     csr_table[CSR_CYCLE_HI] = (struct csr_operation){
@@ -75,61 +139,78 @@ init_csr_table(void)
     csr_table[CSR_TIME_HI]
         = (struct csr_operation){ 1, PRV_USER, RO, 0, get_zicntr_time_h, NULL };
     csr_table[CSR_INSTRET_HI] = (struct csr_operation){
-        1, PRV_USER, RO, 0, get_zicntr_cycle_h, NULL
+        1, PRV_USER, RO, 0, get_zicntr_instret_h, NULL
     };
 
 #endif
 
     // Machine Information Registers
     csr_table[CSR_MVENDORID]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_mvendorid, NULL };
     csr_table[CSR_MARCHID]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_marchid, NULL };
     csr_table[CSR_MIMPID]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_mimpid, NULL };
     csr_table[CSR_MHARTID]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_mhartid, NULL };
 
     // Machine Trap Setup
     csr_table[CSR_MSTATUS]
-        = (struct csr_operation){ 1, PRV_MACHINE,  RW,
-                                  0, mstatus_read, mstatus_write };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, mstatus_read, mstatus_write };
     csr_table[CSR_MISA]
-        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0x40001100, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0x40001100, get_misa, NULL };
     csr_table[CSR_MEDELEG]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_meideleg, set_meideleg };
     csr_table[CSR_MIDELEG]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mideleg, set_mideleg };
     csr_table[CSR_MIE]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mie, set_mie };
     csr_table[CSR_MTVEC]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mtvec, set_mtvec };
     csr_table[CSR_MCOUNTEREN]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0xFFFFFFFF, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0xFFFFFFFF, get_mcounteren, set_mcounteren };
 
     // Machine Trap Handling
     csr_table[CSR_MSCRATCH]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mscratch, set_mscratch };
     csr_table[CSR_MEPC]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mepc, set_mepc };
     csr_table[CSR_MCAUSE]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mcause, set_mcause };
     csr_table[CSR_MTVAL]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mtval, set_mtval };
     csr_table[CSR_MIP]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mip, set_mip };
     csr_table[CSR_MNSTATUS]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mnstatus, NULL };
+
+    // Machine Counters
+    csr_table[CSR_CYCLE_LO]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_cycle_l, NULL };
+    csr_table[CSR_CYCLE_HI]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_cycle_h, NULL };
+    csr_table[CSR_TIME_LO]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_time_l, NULL };
+    csr_table[CSR_TIME_HI]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_time_h, NULL };
+    csr_table[CSR_INSTRET_LO]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_instret_l, NULL };
+    csr_table[CSR_INSTRET_HI]
+        = (struct csr_operation){ 1, PRV_MACHINE, RO, 0, get_zicntr_instret_h, NULL };
 
     // Physical Memory Protection
     csr_table[CSR_PMPCFG0]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
-    csr_table[CSR_PMPADDR0]
-        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
-    for (int i = 1; i < 16; i++)
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg };
+    csr_table[CSR_PMPCFG1]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg };
+    csr_table[CSR_PMPCFG2]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg };
+    csr_table[CSR_PMPCFG3]
+        = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_pmpcfg, set_pmpcfg };
+    for (int i = 0; i < 16; i++)
     {
         csr_table[CSR_PMPADDR0 + i]
-            = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, NULL, NULL };
+            = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_pmpaddr, set_pmpaddr };
     }
 
     // Supervisor Trap Setup
@@ -155,9 +236,9 @@ init_csr_table(void)
 }
 
 void
-ins_zicsr_csrrw(uint32_t rs1, uint32_t rd, uint32_t csr)
+ins_zicsr_csrrw(uint32_t rs1, uint32_t rd, uint32_t csr, uint32_t ins)
 {
-    check_csr_access(csr);
+    check_csr_access(csr, ins);
     uint32_t old_val = csr_read(csr);
     uint32_t new_val = reg_read(rs1);
     csr_write(csr, new_val);
@@ -168,9 +249,9 @@ ins_zicsr_csrrw(uint32_t rs1, uint32_t rd, uint32_t csr)
 }
 
 void
-ins_zicsr_csrrs(uint32_t rs1, uint32_t rd, uint32_t csr)
+ins_zicsr_csrrs(uint32_t rs1, uint32_t rd, uint32_t csr, uint32_t ins)
 {
-    check_csr_access(csr);
+    check_csr_access(csr, ins);
     uint32_t old_val = csr_read(csr);
     if (rs1 != 0)
     {
@@ -185,9 +266,9 @@ ins_zicsr_csrrs(uint32_t rs1, uint32_t rd, uint32_t csr)
 }
 
 void
-ins_zicsr_csrrc(uint32_t rs1, uint32_t rd, uint32_t csr)
+ins_zicsr_csrrc(uint32_t rs1, uint32_t rd, uint32_t csr, uint32_t ins)
 {
-    check_csr_access(csr);
+    check_csr_access(csr, ins);
     uint32_t old_val = csr_read(csr);
     if (rs1 != 0)
     {
@@ -202,9 +283,9 @@ ins_zicsr_csrrc(uint32_t rs1, uint32_t rd, uint32_t csr)
 }
 
 void
-ins_zicsr_csrrwi(uint32_t uimm, uint32_t rd, uint32_t csr)
+ins_zicsr_csrrwi(uint32_t uimm, uint32_t rd, uint32_t csr, uint32_t ins)
 {
-    check_csr_access(csr);
+    check_csr_access(csr, ins);
     uint32_t old_val = csr_read(csr);
     uint32_t new_val = uimm & 0x1F;
     csr_write(csr, new_val);
@@ -215,9 +296,9 @@ ins_zicsr_csrrwi(uint32_t uimm, uint32_t rd, uint32_t csr)
 }
 
 void
-ins_zicsr_csrrsi(uint32_t uimm, uint32_t rd, uint32_t csr)
+ins_zicsr_csrrsi(uint32_t uimm, uint32_t rd, uint32_t csr, uint32_t ins)
 {
-    check_csr_access(csr);
+    check_csr_access(csr, ins);
     uint32_t old_val = csr_read(csr);
     if (uimm != 0)
     {
@@ -231,9 +312,9 @@ ins_zicsr_csrrsi(uint32_t uimm, uint32_t rd, uint32_t csr)
 }
 
 void
-ins_zicsr_csrrci(uint32_t uimm, uint32_t rd, uint32_t csr)
+ins_zicsr_csrrci(uint32_t uimm, uint32_t rd, uint32_t csr, uint32_t ins)
 {
-    check_csr_access(csr);
+    check_csr_access(csr, ins);
     uint32_t old_val = csr_read(csr);
     if (uimm != 0)
     {
@@ -247,3 +328,4 @@ ins_zicsr_csrrci(uint32_t uimm, uint32_t rd, uint32_t csr)
 }
 
 #endif // CONFIG_ENABLE_ZICSR_EXTENSION
+
