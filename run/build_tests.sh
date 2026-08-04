@@ -15,6 +15,7 @@ cd "$SOURCE_DIR/tests" && make XLEN=32
 cp "$SOURCE_DIR/tests/isa/"rv32ui*-p-* "$BUILD_DIR/tests/tmp/"
 cp "$SOURCE_DIR/tests/isa/"rv32um*-p-* "$BUILD_DIR/tests/tmp/"
 cp "$SOURCE_DIR/tests/isa/"rv32ua*-p-* "$BUILD_DIR/tests/tmp/"
+cp "$SOURCE_DIR/tests/isa/"rv32uc*-p-* "$BUILD_DIR/tests/tmp/"
 cp "$SOURCE_DIR/tests/isa/"rv32mi-p-zicntr "$BUILD_DIR/tests/tmp/"
 cp "$SOURCE_DIR/tests/isa/"rv32uzicond-p-* "$BUILD_DIR/tests/tmp/"
 cp "$SOURCE_DIR/tests/isa/"rv32uf*-p-* "$BUILD_DIR/tests/tmp/"

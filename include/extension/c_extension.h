@@ -21,9 +21,22 @@
 #ifndef C_EXTENSION_H
 #define C_EXTENSION_H
 
+#include <stdint.h>
+
 #include <config.h>
 
 #ifdef CONFIG_ENABLE_C_EXTENSION
+
+// Decode and execute one 16-bit compressed (RVC) instruction.
+//
+// Takes ownership of PC advancing for this instruction only:
+//   - success + non-control-flow: caller resumes at pc + 2.
+//   - success + control-flow:     we set g_state.pc to the branch/jump target
+//                                   (the main loop's PC_BACKWARD idiom handles
+//                                   the extra 16-bit step).
+// Returns 0 on success (PC already adjusted), 1 if a trap was raised
+// (illegal instruction / misaligned fetch) and the caller must not advance PC.
+int exec_c_insn(uint16_t c_ins);
 
 #endif // CONFIG_ENABLE_C_EXTENSION
 

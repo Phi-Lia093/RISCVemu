@@ -112,12 +112,14 @@ exec(uint32_t ins)
 // Compressed (RVC) instructions: only legal when misa.C is set and the
 // address is 2-byte aligned. The riscv-tests M-mode programs enable C only
 // inside explicit `.option rvc` regions (and toggle misa.C), so we gate the
-// 16-bit decode path on the runtime misa.C bit rather than fhe build option.
+// 16-bit decode path on the runtime misa.C bit rather than the build option.
+// exec_c_insn() takes ownership of PC advancing for this 16-bit instruction
+// (it compensates for the main loop's unconditional `pc += 4`), so we must not
+// apply PC_BACKWARD here.
 #ifdef CONFIG_ENABLE_C_EXTENSION
     if (likely(misa_c_enabled() && (opcode & 3) != 3))
     {
-        uint16_t c_ins = (uint16_t)(ins & 0xFFFF);
-        g_state.pc -= 2;
+        exec_c_insn((uint16_t)(ins & 0xFFFF));
         return;
     }
 #endif

@@ -284,7 +284,13 @@ init_csr_table(void)
         = (struct csr_operation){ 1, PRV_MACHINE,  RW,
                                   0, mstatus_read, mstatus_write };
     csr_table[CSR_MISA] = (struct csr_operation){
-        1, PRV_MACHINE, RO, 0x40001100, get_misa, NULL
+        // MXL=2 (RV32) | I | M | C. C is masked RO (0x40001104). Reporting C
+        // enables the 16-bit compressed (RVC) decode path, matching the default
+        // `rv32gc` configuration used by the riscv-tests suite. The extensions
+        // are intentionally WARL-masked read-only; ma_fetch.S tolerates either
+        // a fixed on/off C bit (it passes if enabling *or* disabling C has no
+        // effect).
+        1, PRV_MACHINE, RO, 0x40001104, get_misa, NULL
     };
     csr_table[CSR_MEDELEG]
         = (struct csr_operation){ 1, PRV_MACHINE,  RW,
