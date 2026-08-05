@@ -165,8 +165,8 @@ static inline int
 mmu_translate(uint32_t vaddr, enum mmu_access access, uint32_t *ppa)
 {
     bool write = (access == MMU_STORE);
-    uint32_t epriv = (access == MMU_FETCH) ? g_state.privilege
-                                           : mmu_effective_dpriv();
+    uint32_t epriv
+        = (access == MMU_FETCH) ? g_state.privilege : mmu_effective_dpriv();
 
     if (!mmu_vm_active(epriv))
     {
@@ -316,4 +316,3 @@ mmu_write64(uint32_t vaddr, uint64_t val)
 #endif // CONFIG_ENABLE_ZICSR_EXTENSION
 
 #endif // MMU_H
-

@@ -87,11 +87,36 @@ add_custom_target(compile_run
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_SOURCE_DIR}/run/run.bin
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/run/kernel.bin
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/run
     VERBATIM
 )
 
+# Full OS-style boot: OpenSBI fw_jump at the firmware base, the fake
+# next-stage kernel staged via --load at OpenSBI's hand-off point, and a
+# device tree handed to OpenSBI in a1.  The --load/-L option is what stages
+# the second stage -- no address is hardcoded in the emulator.
 add_custom_target(run
+    COMMAND ${PROJECT_NAME} fw_jump.bin 0x80000000
+        --fdt --load kernel.bin@0x80400000
+    WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
+    DEPENDS ${PROJECT_NAME} compile_run
+    VERBATIM
+)
+
+# Debug variant of the SBI + kernel boot (single-step enabled).
+add_custom_target(run_sbi_debug
+    COMMAND ${PROJECT_NAME} fw_jump.bin 0x80000000
+        --fdt --load kernel.bin@0x80400000 -d
+    WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
+    DEPENDS ${PROJECT_NAME} compile_run
+    VERBATIM
+)
+
+# Keep the bare-metal CLINT timer self-test runnable.
+add_custom_target(run_selftest
     COMMAND ${PROJECT_NAME} run.bin 0x1000
     WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
     DEPENDS ${PROJECT_NAME} compile_run

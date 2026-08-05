@@ -120,8 +120,7 @@ struct_word(struct fdt_builder *b, uint32_t w)
 static void
 struct_bytes(struct fdt_builder *b, const void *data, uint32_t len)
 {
-    if (len)
-        memcpy(b->buf + b->struct_off, data, len);
+    if (len) memcpy(b->buf + b->struct_off, data, len);
     b->struct_off += len;
 }
 
@@ -168,8 +167,7 @@ strings_intern(struct fdt_builder *b, const char *name)
 fdt_handle_t
 fdt_builder_init(struct fdt_builder *b)
 {
-    if (!b || !b->buf)
-        return 0;
+    if (!b || !b->buf) return 0;
 
     b->struct_off = struct_base(b);
     b->strings_off = strings_base(b);
@@ -191,8 +189,7 @@ fdt_node_push(fdt_handle_t h, const char *name)
 {
     struct fdt_builder *b = (struct fdt_builder *)(uintptr_t)h;
 
-    if (!name || !*name || !b || b->err)
-        return 0;
+    if (!name || !*name || !b || b->err) return 0;
 
     struct_word(b, FDT_BEGIN_NODE);
     struct_string(b, name);
@@ -205,8 +202,7 @@ fdt_node_pop(fdt_handle_t h)
 {
     struct fdt_builder *b = (struct fdt_builder *)(uintptr_t)h;
 
-    if (!b || b->err || !b->depth)
-        return 0;
+    if (!b || b->err || !b->depth) return 0;
     struct_word(b, FDT_END_NODE);
     b->depth--;
     return h;
@@ -220,8 +216,7 @@ fdt_node_pop(fdt_handle_t h)
 static int
 prop_begin(struct fdt_builder *b, const char *name, uint32_t len)
 {
-    if (!name || !b || b->err)
-        return 0;
+    if (!name || !b || b->err) return 0;
     struct_word(b, FDT_PROP);
     struct_word(b, len);
     struct_word(b, strings_intern(b, name));
@@ -235,8 +230,7 @@ fdt_prop_word(fdt_handle_t h, const char *name, uint32_t v0, uint32_t v1,
     struct fdt_builder *b = (struct fdt_builder *)(uintptr_t)h;
     uint8_t vals[FDT_MAX_PROP_BYTES];
 
-    if (!prop_begin(b, name, sizeof(vals)))
-        return 0;
+    if (!prop_begin(b, name, sizeof(vals))) return 0;
     be32(&vals[0], v0);
     be32(&vals[4], v1);
     be32(&vals[8], v2);
@@ -259,10 +253,8 @@ fdt_prop_ncells(fdt_handle_t h, const char *name, const uint32_t *vals,
     struct fdt_builder *b = (struct fdt_builder *)(uintptr_t)h;
     unsigned int i;
 
-    if (!n || n > FDT_MAX_CELLS)
-        return 0;
-    if (!prop_begin(b, name, n * sizeof(uint32_t)))
-        return 0;
+    if (!n || n > FDT_MAX_CELLS) return 0;
+    if (!prop_begin(b, name, n * sizeof(uint32_t))) return 0;
     for (i = 0; i < n; i++)
     {
         uint8_t c[4];
@@ -300,8 +292,7 @@ fdt_prop_str(fdt_handle_t h, const char *name, const char *str)
     struct fdt_builder *b = (struct fdt_builder *)(uintptr_t)h;
     uint32_t n = (uint32_t)strlen(str) + 1u; /* include NUL */
 
-    if (!prop_begin(b, name, n))
-        return 0;
+    if (!prop_begin(b, name, n)) return 0;
     struct_bytes(b, str, n);
     struct_align(b); /* pad property value to a 4-byte boundary */
     return h;
@@ -312,8 +303,7 @@ fdt_prop_empty(fdt_handle_t h, const char *name)
 {
     struct fdt_builder *b = (struct fdt_builder *)(uintptr_t)h;
 
-    if (!prop_begin(b, name, 0))
-        return 0;
+    if (!prop_begin(b, name, 0)) return 0;
     return h;
 }
 
@@ -323,10 +313,8 @@ fdt_prop_bytes(fdt_handle_t h, const char *name, const void *data, size_t len)
     struct fdt_builder *b = (struct fdt_builder *)(uintptr_t)h;
     uint32_t l = (uint32_t)len;
 
-    if (!prop_begin(b, name, l))
-        return 0;
-    if (l)
-        struct_bytes(b, data, l);
+    if (!prop_begin(b, name, l)) return 0;
+    if (l) struct_bytes(b, data, l);
     struct_align(b); /* pad property value to a 4-byte boundary */
     return h;
 }
@@ -353,8 +341,7 @@ fdt_serialize(fdt_handle_t h)
     struct fdt_builder *b = (struct fdt_builder *)(uintptr_t)h;
     uint32_t off_struct, off_strings, struct_len, strings_len, totalsize;
 
-    if (!b || b->err || b->depth != 0)
-        return 0;
+    if (!b || b->err || b->depth != 0) return 0;
 
     /* Close the root node (opened implicitly by fdt_builder_init) with an
      * FDT_END_NODE token, then the whole structure with FDT_END. */
@@ -382,9 +369,9 @@ fdt_serialize(fdt_handle_t h)
     be32(&b->buf[16], FDT_HEADER_SIZE); /* off_mem_rsvmap */
     be32(&b->buf[20], FDT_VERSION);
     be32(&b->buf[24], FDT_LAST_COMP_VERSION);
-    be32(&b->buf[28], FDT_HART_BASE);   /* boot_cpuid_phys = hartid 0 */
-    be32(&b->buf[32], strings_len);     /* size_dt_strings */
-    be32(&b->buf[36], struct_len);      /* size_dt_struct */
+    be32(&b->buf[28], FDT_HART_BASE); /* boot_cpuid_phys = hartid 0 */
+    be32(&b->buf[32], strings_len);   /* size_dt_strings */
+    be32(&b->buf[36], struct_len);    /* size_dt_struct */
 
     /* Reserve map: exactly one {0,0} terminator entry. */
     {
@@ -397,8 +384,7 @@ fdt_serialize(fdt_handle_t h)
      * the start of the strings block for deterministic output. */
     {
         uint32_t i;
-        for (i = b->struct_off; i < off_strings; i++)
-            b->buf[i] = 0;
+        for (i = b->struct_off; i < off_strings; i++) b->buf[i] = 0;
     }
 
     return (size_t)totalsize;
@@ -434,20 +420,16 @@ static fdt_handle_t
 fdt_build_clint(fdt_handle_t h)
 {
     h = fdt_node_push(h, "clint@2000000");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_str(h, "compatible", "sifive,clint0");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     /* reg = <0x0 0x02000000 0x0 0x10000> under 2/2-celled /soc */
     h = fdt_prop_word(h, "reg", 0x0, CLINT_BASE, 0x0, CLINT_SIZE);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     /* interrupts-extended = <&cpu_intc 3> <&cpu_intc 7>. */
     h = fdt_prop_word(h, "interrupts-extended", FDT_CPU_INTC_PHANDLE,
                       IRQ_M_SOFT, FDT_CPU_INTC_PHANDLE, IRQ_M_TIMER);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_node_pop(h);
     return h;
 }
@@ -464,32 +446,24 @@ static fdt_handle_t
 fdt_build_uart(fdt_handle_t h)
 {
     h = fdt_node_push(h, "uart@10000000");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_str(h, "compatible", "ns16550a");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     /* reg = <0x0 0x10000000 0x0 0x8> under 2/2-celled /soc */
     h = fdt_prop_word(h, "reg", 0x0, UART_BASE, 0x0, UART_NREGS);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "clock-frequency", 3686400);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "current-speed", 115200);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "reg-shift", 0);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "reg-io-width", 1);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_node_pop(h);
     return h;
 }
 #endif /* CONFIG_ENABLE_UART_DEVICE */
-
 
 /*
  * Build the complete machine FDT and write it into g_state.main_memory at
@@ -516,151 +490,111 @@ fdt_build_riscvemu(uint32_t addr)
     fdt_handle_t h;
     size_t size;
 
-    if (!g_state.main_memory)
-        return 0;
+    if (!g_state.main_memory) return 0;
 
     memset(&b, 0, sizeof(b));
     b.buf = g_state.main_memory + addr;
     b.bufsize = FDT_MAX_BUF;
 
     h = fdt_builder_init(&b);
-    if (!h)
-        return 0;
+    if (!h) return 0;
 
     /* --- Root "/" properties --- */
     h = fdt_prop_cells1(h, "#address-cells", 2);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "#size-cells", 2);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_str(h, "compatible", "riscvemu");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_str(h, "model", "RISCVemu RV32 virt");
-    if (!h)
-        return 0;
+    if (!h) return 0;
 
     /* --- /chosen --- */
     h = fdt_node_push(h, "chosen");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     /* stdout-path points OpenSBI's fdt_serial_init() at the 16550 console so
      * sbi_printf output reaches the emulated UART instead of being dropped. */
     h = fdt_prop_str(h, "stdout-path", "/soc/uart@10000000");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_node_pop(h);
-    if (!h)
-        return 0;
+    if (!h) return 0;
 
     /* --- /memory@80000000 --- */
     h = fdt_node_push(h, "memory@80000000");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_str(h, "device_type", "memory");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_word(h, "reg", 0x0, FDT_RAM_START, 0x0, FDT_RAM_SIZE);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_node_pop(h);
-    if (!h)
-        return 0;
+    if (!h) return 0;
 
     /* --- /cpus ------------ */
     h = fdt_node_push(h, "cpus");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "#address-cells", 1);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "#size-cells", 0);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "timebase-frequency", FDT_TIMEBASE_FREQ);
-    if (!h)
-        return 0;
+    if (!h) return 0;
 
     /* --- /cpus/cpu@0 ------ */
     h = fdt_node_push(h, "cpu@0");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_str(h, "device_type", "cpu");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "reg", FDT_HART_BASE);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_str(h, "compatible", "riscv");
-    if (!h)
-        return 0;
-    h = fdt_prop_str(h, "riscv,isa",
-                     "rv32i2p1_m2p0_a2p1_f2p2_c2p0_zicsr2p0");
-    if (!h)
-        return 0;
+    if (!h) return 0;
+    h = fdt_prop_str(h, "riscv,isa", "rv32i2p1_m2p0_a2p1_f2p2_c2p0_zicsr2p0");
+    if (!h) return 0;
 
     /* --- /cpus/cpu@0/interrupt-controller --- */
     h = fdt_node_push(h, "interrupt-controller");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "phandle", FDT_CPU_INTC_PHANDLE);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "#interrupt-cells", 1);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_str(h, "compatible", "riscv,cpu-intc");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_empty(h, "interrupt-controller");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_node_pop(h); /* interrupt-controller */
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_node_pop(h); /* cpu@0 */
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_node_pop(h); /* cpus */
-    if (!h)
-        return 0;
+    if (!h) return 0;
 
     /* --- /soc ------------ */
     h = fdt_node_push(h, "soc");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_str(h, "compatible", "simple-bus");
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "#address-cells", 2);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_cells1(h, "#size-cells", 2);
-    if (!h)
-        return 0;
+    if (!h) return 0;
     h = fdt_prop_empty(h, "ranges");
-    if (!h)
-        return 0;
+    if (!h) return 0;
 
     /* Modelled devices.  New devices are added here (or via a small helper)
      * as one fdt_build_* call inside the open /soc node. */
     h = fdt_build_clint(h);
-    if (!h)
-        return 0;
+    if (!h) return 0;
 #ifdef CONFIG_ENABLE_UART_DEVICE
     h = fdt_build_uart(h);
-    if (!h)
-        return 0;
+    if (!h) return 0;
 #endif
 
     h = fdt_node_pop(h); /* soc */
-    if (!h)
-        return 0;
+    if (!h) return 0;
 
     size = fdt_serialize(h);
     return size;
 }
 
 #endif /* CONFIG_ENABLE_FDT */
-

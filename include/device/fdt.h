@@ -145,8 +145,8 @@ fdt_handle_t fdt_prop_cells3(fdt_handle_t h, const char *name, uint32_t v0,
  * bytes are copied verbatim (big-endian 32-bit groups, if any, are the
  * caller's responsibility).
  */
-fdt_handle_t fdt_prop_bytes(fdt_handle_t h, const char *name,
-                            const void *data, size_t len);
+fdt_handle_t fdt_prop_bytes(fdt_handle_t h, const char *name, const void *data,
+                            size_t len);
 
 /*
  * Assign the property that carries the node's unit-interrupt parent.  The

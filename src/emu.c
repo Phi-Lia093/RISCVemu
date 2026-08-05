@@ -56,6 +56,9 @@ print_usage(const char *prog_name)
     fprintf(stderr,
             "Usage: %s <program_file> <program_base> [options]\n"
             "Options:\n"
+            "  -L, --load FILE@HEX   Load an extra binary into RAM at the\n"
+            "                        given address (repeatable; e.g. the\n"
+            "                        OpenSBI next-stage kernel).\n"
 #ifdef CONFIG_ENABLE_DEBUGGER
             "  -d, --debug         Enable single-step debug mode\n"
             "  -b, --breakpoint    Set breakpoint address (hex format, e.g., "
@@ -70,8 +73,9 @@ print_usage(const char *prog_name)
             "  -h, --help          Show this help message\n"
             "\n"
             "Example:\n"
-            "  %s test.bin 0x1000 -d -b 0x1200\n",
-            prog_name, prog_name);
+            "  %s test.bin 0x1000 -d -b 0x1200\n"
+            "  %s fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000\n",
+            prog_name, prog_name, prog_name);
 }
 
 static int
@@ -84,6 +88,65 @@ parse_hex(const char *str, uint32_t *result)
 
     *result = (uint32_t)val;
     return 0;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Extra (second+ stage) binary load slots collected from `--load FILE@HEX`. */
+/* ------------------------------------------------------------------------- */
+struct extra_load
+{
+    char *file;    /* owned copy of the file name */
+    uint32_t base; /* validated RAM address to place it at */
+};
+
+static int
+push_extra_load(struct extra_load **slots, unsigned *count, unsigned *cap,
+                const char *arg)
+{
+    /* Split at the address separator: FILE@HEX. */
+    const char *at = strrchr(arg, '@');
+    if (!at || at == arg || *(at + 1) == '\0')
+    {
+        fprintf(stderr, "Error: --load expects FILE@HEX, got \"%s\"\n", arg);
+        return -1;
+    }
+
+    uint32_t base;
+    if (parse_hex(at + 1, &base) != 0)
+    {
+        fprintf(stderr, "Error: invalid address in --load \"%s\"\n", arg);
+        return -1;
+    }
+
+    if (*count == *cap)
+    {
+        unsigned new_cap = *cap ? *cap * 2 : 4;
+        struct extra_load *grown = realloc(*slots, new_cap * sizeof(**slots));
+        if (!grown)
+        {
+            perror("realloc");
+            return -1;
+        }
+        *slots = grown;
+        *cap = new_cap;
+    }
+
+    (*slots)[*count].file = strndup(arg, (size_t)(at - arg));
+    if (!(*slots)[*count].file)
+    {
+        perror("strndup");
+        return -1;
+    }
+    (*slots)[*count].base = base;
+    (*count)++;
+    return 0;
+}
+
+static void
+free_extra_slots(struct extra_load *slots, unsigned count)
+{
+    for (unsigned i = 0; i < count; i++) free(slots[i].file);
+    free(slots);
 }
 
 int
@@ -102,26 +165,39 @@ main(int argc, char **argv)
     uint32_t program_base;
     const char *program_name;
 
-    static struct option long_options[] = {
+    // Extra (second+ stage) binaries staged via one or more `--load FILE@HEX`.
+    struct extra_load *extra_slots = NULL;
+    unsigned extra_count = 0;
+    unsigned extra_cap = 0;
+
+    static struct option long_options[]
+        = { { "load", required_argument, 0, 'L' },
 #ifdef CONFIG_ENABLE_DEBUGGER
-        { "debug", no_argument, 0, 'd' },
-        { "breakpoint", required_argument, 0, 'b' },
+            { "debug", no_argument, 0, 'd' },
+            { "breakpoint", required_argument, 0, 'b' },
 #endif
 #ifdef CONFIG_ENABLE_FDT
-        { "fdt", optional_argument, 0, 'F' },
+            { "fdt", optional_argument, 0, 'F' },
 #endif
-        { "help", no_argument, 0, 'h' },
-        { 0, 0, 0, 0 }
-    };
+            { "help", no_argument, 0, 'h' },
+            { 0, 0, 0, 0 } };
 
 #ifdef CONFIG_ENABLE_DEBUGGER
-    while ((opt = getopt_long(argc, argv, "db:h", long_options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "Ldb:h", long_options, NULL)) != -1)
 #else
-    while ((opt = getopt_long(argc, argv, "h", long_options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "Lh", long_options, NULL)) != -1)
 #endif
     {
         switch (opt)
         {
+        case 'L':
+            if (push_extra_load(&extra_slots, &extra_count, &extra_cap, optarg)
+                != 0)
+            {
+                free_extra_slots(extra_slots, extra_count);
+                return 1;
+            }
+            break;
 #ifdef CONFIG_ENABLE_DEBUGGER
         case 'd':
             debug_mode = 1;
@@ -147,8 +223,7 @@ main(int argc, char **argv)
             {
                 if (parse_hex(optarg, &fdt_addr) != 0)
                 {
-                    fprintf(stderr,
-                            "Error: Invalid FDT address: %s\n", optarg);
+                    fprintf(stderr, "Error: Invalid FDT address: %s\n", optarg);
                     return 1;
                 }
             }
@@ -215,15 +290,20 @@ main(int argc, char **argv)
     info("loaded %zu bytes to 0x%x", len, program_base);
     munmap(addr, len);
 
+    // Extra (e.g. OpenSBI next-stage) binaries are staged later, once the
+    // device tree address/size are known so overlaps can be rejected (see
+    // the `--load` block after the FDT section).
+
 #ifdef CONFIG_ENABLE_FDT
     // OpenSBI and OS bootloaders expect a flattened device tree handed in a1
     // (and the boot HART id in a0).  This is opt-in via `--fdt[=addr]` because
     // the general test harness also loads at 0x80000000 and must keep a0/a1
     // untouched.  When enabled we build the DTB into the emulated RAM, then
     // prime the boot registers before the firmware runs.
+    size_t fdt_size = 0;
     if (fdt_enabled)
     {
-        size_t fdt_size = fdt_build_riscvemu(fdt_addr);
+        fdt_size = fdt_build_riscvemu(fdt_addr);
         if (fdt_size == 0)
         {
             fatal("failed to build device tree at 0x%x", fdt_addr);
@@ -234,10 +314,50 @@ main(int argc, char **argv)
         }
         g_state.gpr[10] = 0;        /* a0 = boot HART id (hart 0) */
         g_state.gpr[11] = fdt_addr; /* a1 = pointer to the FDT */
-        info("built %zu-byte device tree at 0x%x (a0/a1 supplied)",
-             fdt_size, fdt_addr);
+        info("built %zu-byte device tree at 0x%x (a0/a1 supplied)", fdt_size,
+             fdt_addr);
     }
 #endif
+
+    // Stage any extra (e.g. OpenSBI next-stage) binaries.  Each is placed at
+    // its requested address; nothing here assumes a particular layout, so any
+    // secondary boot stage can be parked ahead of the firmware's hand-off
+    // point.  Ranges are bounds- and overlap-checked (including against the
+    // device tree, which is already resident when fdt_enabled).
+    for (unsigned i = 0; i < extra_count; i++)
+    {
+        size_t elen;
+        uint8_t *eaddr = (uint8_t *)map_file(extra_slots[i].file, &elen,
+                                             PROT_READ | PROT_WRITE);
+        if (!eaddr)
+        {
+            fatal("failed to load --load binary: %s", extra_slots[i].file);
+        }
+        uint32_t base = extra_slots[i].base;
+        if (base + elen > MEM_SIZE)
+        {
+            fatal("extra binary \"%s\" too large for memory (base=0x%x, "
+                  "size=%zu, max=0x%x)",
+                  extra_slots[i].file, base, elen, MEM_SIZE);
+            munmap(eaddr, elen);
+            terminate_logger();
+            return 1;
+        }
+#ifdef CONFIG_ENABLE_FDT
+        if (fdt_enabled && base < fdt_addr + fdt_size && fdt_addr < base + elen)
+        {
+            fatal("extra binary \"%s\" at 0x%x overlaps the device tree at "
+                  "0x%x (size=%zu)",
+                  extra_slots[i].file, base, fdt_addr, fdt_size);
+        }
+#endif
+        memcpy(g_state.main_memory + base, eaddr, elen);
+        info("loaded extra %zu bytes to 0x%x (from %s)", elen, base,
+             extra_slots[i].file);
+        munmap(eaddr, elen);
+    }
+    free_extra_slots(extra_slots, extra_count);
+    extra_slots = NULL;
 
 #ifdef CONFIG_ENABLE_DEBUGGER
     init_debugger();
@@ -292,8 +412,7 @@ main(int argc, char **argv)
     // FDT/OS-boot mode; otherwise it misreads a healthy boot as a hung test.
     int spin_detect_active = 1;
 #ifdef CONFIG_ENABLE_FDT
-    if (fdt_enabled)
-        spin_detect_active = 0;
+    if (fdt_enabled) spin_detect_active = 0;
 #endif
 
 #ifdef CONFIG_ENABLE_DEBUGGER

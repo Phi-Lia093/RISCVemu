@@ -183,8 +183,12 @@ raise_exception_pc(uint32_t cause, uint32_t tval, uint32_t epc)
     uint32_t current_privilege = g_state.privilege;
     uint32_t pc = g_state.pc;
 
-    warn("Exception: cause=%d, tval=0x%08X, pc=0x%08X, epc=0x%08X, priv=%d",
-         cause, tval, pc, epc, current_privilege);
+    // A guest exception is ordinary running behaviour - e.g. OpenSBI probing
+    // optional CSRs via csr_read_allowed, or an OS deliberately trapping to its
+    // own handler.  Log at debug level so a normal boot stays clean; use -d to
+    // see every trap.
+    debug("Exception: cause=%d, tval=0x%08X, pc=0x%08X, epc=0x%08X, priv=%d",
+          cause, tval, pc, epc, current_privilege);
 
     bool delegate_to_s = false;
 

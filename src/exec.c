@@ -397,24 +397,44 @@ exec(uint32_t ins)
     }
     // FMA: fmadd / fmsub / fnmsub / fnmadd
     case 0b1000011:
-        if (fpu_fs_off()) { raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins); break; }
+        if (fpu_fs_off())
+        {
+            raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins);
+            break;
+        }
         insf_r_fma(ins, 0);
         break; // fmadd
     case 0b1000111:
-        if (fpu_fs_off()) { raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins); break; }
+        if (fpu_fs_off())
+        {
+            raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins);
+            break;
+        }
         insf_r_fma(ins, 1);
         break; // fmsub
     case 0b1001011:
-        if (fpu_fs_off()) { raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins); break; }
+        if (fpu_fs_off())
+        {
+            raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins);
+            break;
+        }
         insf_r_fma(ins, 2);
         break; // fnmsub
     case 0b1001111:
-        if (fpu_fs_off()) { raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins); break; }
+        if (fpu_fs_off())
+        {
+            raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins);
+            break;
+        }
         insf_r_fma(ins, 3);
         break; // fnmadd
     // FP-OP
     case 0b1010011:
-        if (fpu_fs_off()) { raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins); break; }
+        if (fpu_fs_off())
+        {
+            raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins);
+            break;
+        }
         insf_r_fpop(ins);
         break;
 #endif
