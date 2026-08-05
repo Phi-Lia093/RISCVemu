@@ -45,6 +45,7 @@
 
 /* Device Support */
 #cmakedefine CONFIG_ENABLE_UART_DEVICE
+#cmakedefine CONFIG_ENABLE_FDT
 
 /* Performance (from host detection, not user-configurable) */
 #cmakedefine USE_HOST_M_ACCEL

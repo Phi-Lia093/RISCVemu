@@ -29,9 +29,22 @@ static uint64_t clint_mtime = 0;
 static uint64_t clint_mtimecmp = 0; // 0 => compare disabled (no interrupt)
 
 void
+clint_init(void)
+{
+    clint_mtime = 0;
+    clint_mtimecmp = 0;
+}
+
+void
 clint_tick(void)
 {
     clint_mtime++;
+}
+
+uint64_t
+clint_get_mtime(void)
+{
+    return clint_mtime;
 }
 
 bool

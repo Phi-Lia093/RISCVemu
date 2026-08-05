@@ -28,6 +28,7 @@
 
 #include <debugger.h>
 #include <device/clint.h>
+#include <device/fdt.h>
 #include <emu.h>
 #include <exec.h>
 #include <fmap.h>
@@ -60,6 +61,12 @@ print_usage(const char *prog_name)
             "  -b, --breakpoint    Set breakpoint address (hex format, e.g., "
             "0x1000)\n"
 #endif
+#ifdef CONFIG_ENABLE_FDT
+            "  -F, --fdt[=addr]    Build + hand a device tree to firmware "
+            "in a1\n"
+            "                      (a0=hartid 0); addr defaults to "
+            "0x87f00000\n"
+#endif
             "  -h, --help          Show this help message\n"
             "\n"
             "Example:\n"
@@ -88,6 +95,10 @@ main(int argc, char **argv)
     uint32_t breakpoint = 0;
     int breakpoint_set = 0;
 #endif
+#ifdef CONFIG_ENABLE_FDT
+    int fdt_enabled = 0;
+    uint32_t fdt_addr = FDT_DEFAULT_ADDR;
+#endif
     uint32_t program_base;
     const char *program_name;
 
@@ -95,6 +106,9 @@ main(int argc, char **argv)
 #ifdef CONFIG_ENABLE_DEBUGGER
         { "debug", no_argument, 0, 'd' },
         { "breakpoint", required_argument, 0, 'b' },
+#endif
+#ifdef CONFIG_ENABLE_FDT
+        { "fdt", optional_argument, 0, 'F' },
 #endif
         { "help", no_argument, 0, 'h' },
         { 0, 0, 0, 0 }
@@ -121,6 +135,23 @@ main(int argc, char **argv)
                 return 1;
             }
             breakpoint_set = 1;
+            break;
+#endif
+
+#ifdef CONFIG_ENABLE_FDT
+        case 'F':
+            fdt_enabled = 1;
+            /* --fdt=0x... decodes the explicit placement; --fdt alone keeps
+             * the default.  getopt delivers optional_argument via "=" only. */
+            if (optarg)
+            {
+                if (parse_hex(optarg, &fdt_addr) != 0)
+                {
+                    fprintf(stderr,
+                            "Error: Invalid FDT address: %s\n", optarg);
+                    return 1;
+                }
+            }
             break;
 #endif
 
@@ -183,6 +214,30 @@ main(int argc, char **argv)
     memcpy(g_state.main_memory + program_base, addr, len);
     info("loaded %zu bytes to 0x%x", len, program_base);
     munmap(addr, len);
+
+#ifdef CONFIG_ENABLE_FDT
+    // OpenSBI and OS bootloaders expect a flattened device tree handed in a1
+    // (and the boot HART id in a0).  This is opt-in via `--fdt[=addr]` because
+    // the general test harness also loads at 0x80000000 and must keep a0/a1
+    // untouched.  When enabled we build the DTB into the emulated RAM, then
+    // prime the boot registers before the firmware runs.
+    if (fdt_enabled)
+    {
+        size_t fdt_size = fdt_build_riscvemu(fdt_addr);
+        if (fdt_size == 0)
+        {
+            fatal("failed to build device tree at 0x%x", fdt_addr);
+        }
+        if (fdt_addr + fdt_size > MEM_SIZE || fdt_addr < program_base + len)
+        {
+            fatal("device tree at 0x%x overlaps loaded program", fdt_addr);
+        }
+        g_state.gpr[10] = 0;        /* a0 = boot HART id (hart 0) */
+        g_state.gpr[11] = fdt_addr; /* a1 = pointer to the FDT */
+        info("built %zu-byte device tree at 0x%x (a0/a1 supplied)",
+             fdt_size, fdt_addr);
+    }
+#endif
 
 #ifdef CONFIG_ENABLE_DEBUGGER
     init_debugger();
@@ -341,6 +396,13 @@ main(int argc, char **argv)
 #else
     while (!g_state.terminated)
     {
+        // Dispatch pending interrupts (e.g. CLINT MIP.MTIP) before the next
+        // fetch, exactly like the debugger-enabled loop above.  Without this,
+        // timer and other interrupts would never be taken when the built-in
+        // debugger is compiled out.
+#ifdef CONFIG_ENABLE_ZICSR_EXTENSION
+        check_and_handle_interrupts();
+#endif
         if (g_state.pc >= MEM_SIZE)
         {
             fatal("PC out of bounds: 0x%x", g_state.pc);

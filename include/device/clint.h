@@ -36,11 +36,22 @@
 #define CLINT_MTIMECMP_HART0 0x02004000u
 #define CLINT_MTIME_ADDR 0x0200BFF8u
 
+// Reset the CLINT to its power-on state (mtime = 0, mtimecmp = 0, i.e. the
+// compare disabled).  Called once at emulator startup so every run begins from
+// a deterministic counter value.
+void clint_init(void);
+
 // Advance the free-running mtime counter by one tick.
 void clint_tick(void);
 
 // Returns true when the machine timer interrupt is pending (mtime >= mtimecmp).
 bool clint_mtip_pending(void);
+
+// Return the current value of the free-running mtime counter.  The
+// architectural `time` CSR (rdtime) must report the same value that drives
+// MIP.MTIP so that firmware can compute an mtimecmp deadline from rdtime and
+// have it match the comparator in clint_mtip_pending().
+uint64_t clint_get_mtime(void);
 
 // Handle a byte-aligned (or wider, little-endian) MMIO access to the CLINT
 // window.  Return the byte value read, or -1 if `addr` is not a register that

@@ -22,18 +22,11 @@
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
 
 #include <stdint.h>
-#include <time.h>
+
+#include <device/clint.h>
 
 uint64_t cycle = 0;
 uint64_t instret = 0;
-
-static inline uint64_t
-get_time()
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000000000 + (uint64_t)ts.tv_nsec;
-}
 
 uint32_t
 get_zicntr_cycle_l()
@@ -50,13 +43,18 @@ get_zicntr_cycle_h()
 uint32_t
 get_zicntr_time_l()
 {
-    return (uint32_t)get_time();
+    // The architectural `time` CSR must report the same free-running counter
+    // that drives the CLINT comparator (MIP.MTIP), otherwise firmware that
+    // programs mtimecmp from rdtime would compute a deadline against a
+    // different clock and the timer would never (or wildly late) fire.
+    uint64_t mtime = clint_get_mtime();
+    return (uint32_t)mtime;
 }
 
 uint32_t
 get_zicntr_time_h()
 {
-    return (uint32_t)(get_time() >> 32);
+    return (uint32_t)(clint_get_mtime() >> 32);
 }
 
 uint32_t

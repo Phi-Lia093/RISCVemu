@@ -30,6 +30,7 @@
 void
 init_mem(void)
 {
+    clint_init();
     g_state.main_memory = (uint8_t *)calloc(MEM_SIZE, sizeof(uint8_t));
 #ifdef CONFIG_ENABLE_A_EXTENSION
     hashmap_init(&g_state.mmu_flags);
