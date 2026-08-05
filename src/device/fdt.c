@@ -65,7 +65,8 @@
 #define FDT_HEADER_SIZE 40u /* 10 x 32-bit words */
 
 #define FDT_STRUCT_MAX 4096u /* conservative bound for this small machine */
-#define FDT_MAX_PROP_BYTES (4u * sizeof(uint32_t))
+#define FDT_MAX_CELLS 4u
+#define FDT_MAX_PROP_BYTES (FDT_MAX_CELLS * sizeof(uint32_t))
 
 #define FDT_MAX_BUF (FDT_STRUCT_MAX * 4u) /* 16 KiB working region */
 
@@ -244,23 +245,53 @@ fdt_prop_word(fdt_handle_t h, const char *name, uint32_t v0, uint32_t v1,
     return h;
 }
 
+/*
+ * Emit a property whose value is `n` big-endian 32-bit cells.  Keep the length
+ * in the PROP header exact (n * 4 bytes) so libfdt's fdt_cells() - which
+ * requires #address-cells / #size-cells to be a single 4-byte cell - accepts
+ * them.  This is what makes the 1/2/3-cell helpers correct vs. fdt_prop_word
+ * (which always writes four cells / 16 bytes).
+ */
+static fdt_handle_t
+fdt_prop_ncells(fdt_handle_t h, const char *name, const uint32_t *vals,
+                unsigned int n)
+{
+    struct fdt_builder *b = (struct fdt_builder *)(uintptr_t)h;
+    unsigned int i;
+
+    if (!n || n > FDT_MAX_CELLS)
+        return 0;
+    if (!prop_begin(b, name, n * sizeof(uint32_t)))
+        return 0;
+    for (i = 0; i < n; i++)
+    {
+        uint8_t c[4];
+        be32(c, vals[i]);
+        struct_bytes(b, c, sizeof(c));
+    }
+    return h;
+}
+
 fdt_handle_t
 fdt_prop_cells1(fdt_handle_t h, const char *name, uint32_t v0)
 {
-    return fdt_prop_word(h, name, v0, 0, 0, 0);
+    const uint32_t vals[1] = { v0 };
+    return fdt_prop_ncells(h, name, vals, 1);
 }
 
 fdt_handle_t
 fdt_prop_cells2(fdt_handle_t h, const char *name, uint32_t v0, uint32_t v1)
 {
-    return fdt_prop_word(h, name, v0, v1, 0, 0);
+    const uint32_t vals[2] = { v0, v1 };
+    return fdt_prop_ncells(h, name, vals, 2);
 }
 
 fdt_handle_t
 fdt_prop_cells3(fdt_handle_t h, const char *name, uint32_t v0, uint32_t v1,
                 uint32_t v2)
 {
-    return fdt_prop_word(h, name, v0, v1, v2, 0);
+    const uint32_t vals[3] = { v0, v1, v2 };
+    return fdt_prop_ncells(h, name, vals, 3);
 }
 
 fdt_handle_t
@@ -512,6 +543,11 @@ fdt_build_riscvemu(uint32_t addr)
 
     /* --- /chosen --- */
     h = fdt_node_push(h, "chosen");
+    if (!h)
+        return 0;
+    /* stdout-path points OpenSBI's fdt_serial_init() at the 16550 console so
+     * sbi_printf output reaches the emulated UART instead of being dropped. */
+    h = fdt_prop_str(h, "stdout-path", "/soc/uart@10000000");
     if (!h)
         return 0;
     h = fdt_node_pop(h);

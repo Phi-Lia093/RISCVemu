@@ -285,6 +285,17 @@ main(int argc, char **argv)
     int spin_armed = 0;
     uint32_t last_fetch_pc = 0;
 
+    // The write_tohost spin detector exists to conclude the riscv-tests
+    // harness, which spins forever after swallowing an exception.  OpenSBI and
+    // other OS firmware legitimately trap (csr_read_allowed CSR probes) and
+    // busy-spin (cpu_relax / coldboot waits), so the detector must be off in
+    // FDT/OS-boot mode; otherwise it misreads a healthy boot as a hung test.
+    int spin_detect_active = 1;
+#ifdef CONFIG_ENABLE_FDT
+    if (fdt_enabled)
+        spin_detect_active = 0;
+#endif
+
 #ifdef CONFIG_ENABLE_DEBUGGER
     while (!g_state.terminated)
     {
@@ -359,7 +370,7 @@ main(int argc, char **argv)
 #endif
         // Detect the harness "write_tohost" spin loop (armed only once the
         // program traps; the loop is reached after a swallowed exception).
-        if (g_state.just_trapped)
+        if (spin_detect_active && g_state.just_trapped)
         {
             g_state.just_trapped = 0;
             spin_armed = 1;
@@ -367,7 +378,7 @@ main(int argc, char **argv)
             loop_window_pos = 0;
             spin_count = 0;
         }
-        if (spin_armed)
+        if (spin_armed && spin_detect_active)
         {
             int seen = 0;
             for (int i = 0; i < 8; i++)
@@ -451,7 +462,7 @@ main(int argc, char **argv)
 #endif
         // Detect the harness "write_tohost" spin loop (armed only once the
         // program traps; the loop is reached after a swallowed exception).
-        if (g_state.just_trapped)
+        if (spin_detect_active && g_state.just_trapped)
         {
             g_state.just_trapped = 0;
             spin_armed = 1;
@@ -459,7 +470,7 @@ main(int argc, char **argv)
             loop_window_pos = 0;
             spin_count = 0;
         }
-        if (spin_armed)
+        if (spin_armed && spin_detect_active)
         {
             int seen = 0;
             for (int i = 0; i < 8; i++)

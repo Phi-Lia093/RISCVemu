@@ -334,14 +334,15 @@ init_csr_table(void)
         = (struct csr_operation){ 1, PRV_MACHINE,  RW,
                                   0, mstatus_read, mstatus_write };
     csr_table[CSR_MISA] = (struct csr_operation){
-        // MXL=2 (RV32) | I | M | A | F | C (0x40001125). Reporting these enables
-        // the corresponding decode paths and advertises the features an SBI
-        // firmware (e.g. OpenSBI) probes (A for atomics, F for the FPU). The
-        // extensions are intentionally WARL-masked read-only. S/U are *not*
+        // MXL=2 (RV32) | I | M | A | F | C | S (0x40041125). Reporting these
+        // enables the corresponding decode paths and advertises the features
+        // an SBI firmware (e.g. OpenSBI) probes (A for atomics, F for the FPU,
+        // S for the coldboot HART that resumes the next stage in S-mode). The
+        // extensions are intentionally WARL-masked read-only. U is *not*
         // advertised here: the riscv-tests M-mode csr.S gate the user-mode CSR
-        // privilege tests on misa.U and the SUPERVISOR/PRIVILEGE enforcement
-        // for those windows is intentionally left out of scope for now.
-        1, PRV_MACHINE, RO, 0x40001125, get_misa, NULL
+        // privilege tests on misa.U and the USER privilege enforcement is
+        // intentionally left out of scope for now.
+        1, PRV_MACHINE, RO, 0x40041125, get_misa, NULL
     };
     csr_table[CSR_MEDELEG]
         = (struct csr_operation){ 1, PRV_MACHINE,  RW,
