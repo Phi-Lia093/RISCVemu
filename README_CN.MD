@@ -9,29 +9,52 @@ SPDX-License-Identifier: GPL-3.0-or-later
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![C23](https://img.shields.io/badge/C-23-blue.svg)](https://en.cppreference.com/w/c/23)
 [![CMake](https://img.shields.io/badge/CMake-3.10+-green.svg)](https://cmake.org/)
+[![RISC-V](https://img.shields.io/badge/RISC--V-IMA(FDQ)C%20%26%20more-red.svg)](https://riscv.org/)
+[![Version](https://img.shields.io/badge/version-0.4-blue.svg)]()
 
-一个教学用 RV32IMA(U) 指令集模拟器，支持基础整数指令集（I）、乘除扩展（M）、原子操作扩展（A），以及用户态模式（U）的指令解码。使用 C23 编写，通过 CMake 构建，专为学习和探索 RISC-V 架构设计。
+一个使用 C23 编写的教学用 RISC-V 指令集模拟器。支持基础整数指令集 (I)、乘除扩展 (M)、原子操作扩展 (A)、压缩指令扩展 (C)、单/双/四/半精度浮点扩展 (F/D/Q/Zfh) 以及不断增加的更多标准扩展。专为学习和探索 RISC-V 架构而设计，现已支持 OpenSBI/操作系统引导和完整的设备树。
+
+[中文文档](./README_CN.MD) | [English](./README.MD)
 
 ## ✨ 特性
 
-- **完整的 RV32I 基础指令集**：所有整数指令
-- **M 扩展**：乘除指令支持
-- **A 扩展**：原子操作指令（LR/SC, AMO*）
-- **U 模式支持**：识别并解码用户态指令，特权指令和 Zicsr/Zifencei 扩展作为 NOP 处理
-- **4GB 内存空间**：采用虚拟页框分配，写时分配策略，高效利用内存
+### ISA 支持
+- **RV32I 基础整数指令集**：实现了所有整数指令
+- **M 扩展**：整数乘除法
+- **A 扩展**：原子操作 (LR/SC, AMO*)
+- **C 扩展**：16位压缩指令
+- **F/D/Q 扩展**：单/双/四精度浮点数 (需要 Zicsr)
+- **Zfh 扩展**：半精度浮点数
+- **Zicsr/Zifencei**：CSR 指令和 FENCE.I
+- **Zicntr**：计数器指令 (cycle, instret, time)
+- **Zicond**：条件操作指令
+
+### 系统与引导支持
+- **机器/监管/用户模式**：完整的特权级支持
+- **SV32 页表**：带 MMU 的虚拟内存
+- **CLINT 定时器**：带有 mtime/mtimecmp 的核心本地中断器
+- **UART 模拟**：在 `0x10000000` 处兼容 16550
+- **设备树 (FDT)**：为 OpenSBI/操作系统引导自动生成扁平设备树
+- **OpenSBI 集成**：在 `0x80000000` 引导 `fw_jump.bin`，并支持下一阶段内核加载
+- **多阶段二进制加载**：`--load FILE@HEX` 用于加载额外的二进制文件（如内核、initrd）
+
+### 运行时与调试
+- **4GB 内存空间**：采用写时复制策略的虚拟页帧分配
 - **交互式调试器**：单步执行、寄存器查看/修改、内存读写、反汇编、断点
-- **UART 模拟**：写入 `0x10000000` 的数据会作为 ASCII 字符直接输出到 stdout
-- **Flat Binary 加载**：支持直接加载二进制文件到指定基址
-- **通过 riscv-tests 测试**：除特权级相关测试外 100% PASS
+- **Sdtrig 硬件断点**：支持取指断点的触发模块
+- **riscv-tests 测试套件**：对所有支持的扩展进行完整测试覆盖
 
 ## 📋 依赖
 
 ### 构建依赖
-- C23 兼容编译器（GCC 13+ / Clang 16+）
+- 支持 C23 的编译器 (GCC 13+ / Clang 16+)
 - CMake 3.10+
 - GNU Make
+- libsoftfloat（作为子模块包含或系统包）
+- OpenSBI（可选，用于基于 SBI 的引导）
+- Linux（可选，实验性支持）
 
-### 运行测试依赖
+### 测试依赖
 - [RISC-V GNU Toolchain](https://github.com/riscv-collab/riscv-gnu-toolchain) (`riscv32-unknown-elf-gcc`, `riscv32-unknown-elf-objcopy`)
 
 ## 🚀 快速开始
@@ -39,7 +62,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 ### 构建
 
 ```bash
-# 克隆仓库（包含 submodule）
+# 克隆仓库（包含子模块）
 git clone --recursive <repository-url>
 cd RISCVemu
 
@@ -49,132 +72,212 @@ cmake ..
 make
 ```
 
-### 运行一个程序
+### 运行裸机程序
 
 ```bash
 # 基本用法
 ./RISCVemu <program.bin> <base_address>
 
-# 示例：加载 run.bin 到 0x1000
+# 示例：在 0x1000 加载 run.bin（CLINT 自测程序）
 ./RISCVemu run.bin 0x1000
 
-# 带调试器启动
+# 启用调试器启动
 ./RISCVemu run.bin 0x1000 -d
-
-# 设置断点
-./RISCVemu run.bin 0x1000 -d -b 0x1200
 ```
 
-### 运行测试套件
+### 运行 OpenSBI + 内核（操作系统引导）
 
 ```bash
-# 首次使用需要初始化 riscv-tests submodule
-git submodule update --init
-cd tests && git submodule update --init && cd ..
+# 引导 OpenSBI fw_jump，并将内核暂存到 0x80400000
+./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000
 
-# 构建测试程序并运行
-make build_tests   # 编译 riscv-tests 并转换为 bin 格式
-make run_tests     # 运行所有测试
+# 带调试器
+./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 -d
+```
+
+### CMake 便捷目标
+
+```bash
+make run            # 运行 OpenSBI + 内核引导演示
+make run_sbi_debug  # 同上，启用调试器
+make run_selftest   # 运行 CLINT 定时器自测
+make debug          # 在调试模式下运行自测
+make build_tests    # 构建 riscv-tests
+make run_tests      # 运行所有测试
+```
+
+## 🔧 CLI 选项
+
+```
+Usage: ./RISCVemu <program_file> <program_base> [options]
+Options:
+  -L, --load FILE@HEX   将额外的二进制文件加载到 RAM 的指定地址
+                        （可重复使用；例如 OpenSBI 的下一阶段内核）
+  -d, --debug           启用单步调试模式
+  -b, --breakpoint      设置断点地址（十六进制格式）
+  -F, --fdt[=addr]      构建设备树并通过 a1 传递给固件
+                        （a0=hartid 0）；地址默认为 0x87f00000
+  -h, --help            显示此帮助信息
+
+示例：
+  ./RISCVemu test.bin 0x1000 -d -b 0x1200
+  ./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000
 ```
 
 ## 🔧 调试器命令
 
-启动时使用 `-d` 参数进入调试模式，支持以下交互式命令：
+使用 `-d` 标志启动进入交互式调试模式：
 
-| 命令 | 说明 |
-|------|------|
+| 命令 | 描述 |
+|---------|-------------|
 | `s` / `n` | 单步执行 |
 | `c` | 继续执行 |
 | `q` | 退出模拟器 |
 | `r` | 显示所有寄存器 |
-| `p <addr>` | 设置 PC 指针 |
-| `R <reg> <val>` | 设置寄存器值（支持数字或名称，如 `a0`, `sp`） |
-| `m <addr>` | 显示指定地址的 32-bit 值 |
-| `d <start> <end>` | 显示内存范围 |
-| `B <addr> [count]` | 显示字节（默认 16 字节） |
+| `p <addr>` | 设置程序计数器 |
+| `R <reg> <val>` | 设置寄存器值（支持数字或名称） |
+| `m <addr>` | 显示地址处的 32 位值 |
+| `d <start> <end>` | 转储内存范围 |
+| `B <addr> [count]` | 转储字节（默认 16 个） |
 | `S <addr>` | 从地址读取并显示字符串 |
-| `w <addr> <val>` | 写入 32-bit 值到内存 |
-| `u <addr> [count]` | 反汇编指令（默认当前 PC） |
+| `w <addr> <val>` | 向内存写入 32 位值 |
+| `u <addr> [count]` | 反汇编指令（默认使用当前 PC） |
 | `D` | 切换反汇编/原始十六进制显示 |
 | `b <addr>` | 设置断点 |
 | `C` | 清除断点 |
 | `h` / `?` | 显示帮助 |
-| `<Enter>` | 重复上一条命令 |
+| `<Enter>` | 重复上一个命令 |
 
 ## 📁 项目结构
 
 ```
 RISCVemu/
-├── CMakeLists.txt          # CMake 构建配置
+├── CMakeLists.txt          # 可配置扩展的 CMake 构建文件
+├── config.h.in             # 构建时配置模板
 ├── include/                # 公共头文件
 │   ├── debugger.h          # 调试器接口
 │   ├── disasm.h            # 反汇编器
-│   ├── emu.h               # 模拟器核心状态
+│   ├── emu.h               # 核心模拟器状态
 │   ├── exec.h              # 指令执行引擎
-│   ├── fmap.h              # 内存映射工具
+│   ├── fmap.h              # 文件映射工具
 │   ├── logger.h            # 日志系统
 │   ├── mem.h               # 内存管理
+│   ├── mmu.h               # SV32 MMU 实现
+│   ├── device/             # 设备模拟
+│   │   ├── clint.h         # CLINT 定时器
+│   │   ├── fdt.h           # 扁平设备树生成器
+│   │   └── uart.h          # 16550 UART
 │   └── extension/          # 扩展指令头文件
+│       ├── a_extension.h
+│       ├── c_extension.h
+│       ├── f_extension.h
+│       ├── m_extension.h
+│       ├── sdtrig_extension.h
+│       ├── system.h
+│       ├── zicntr_extension.h
+│       ├── zicond_extension.h
+│       ├── zicsr_extension.h
+│       └── zifencei_extension.h
 ├── src/                    # 源代码
-│   ├── debugger.c          # 调试器实现
-│   ├── disasm.c            # 反汇编器实现
-│   ├── emu.c               # 主程序入口
-│   ├── exec.c              # 指令执行核心
-│   ├── fmap.c              # 文件映射
-│   ├── logger.c            # 日志实现
-│   ├── mem.c               # 内存管理
-│   └── extension/          # 扩展指令实现（M/A）
-├── run/                    # 示例程序
-│   ├── compile_run.sh      # 编译示例程序脚本
-│   ├── link.ld             # 链接脚本
-│   ├── run.c               # 示例 C 程序
-│   └── run.bin             # 预编译二进制
-├── tests/                  # riscv-tests (submodule)
-│   ├── isa/                # 指令集测试
-│   ├── benchmarks/         # 性能测试
-│   └── ...
+│   ├── debugger.c
+│   ├── disasm.c
+│   ├── emu.c
+│   ├── exec.c
+│   ├── fmap.c
+│   ├── logger.c
+│   ├── mem.c
+│   ├── device/
+│   │   ├── clint.c
+│   │   └── fdt.c
+│   └── extension/
+│       ├── c_extension.c
+│       ├── f_extension.c
+│       ├── m_extension.c
+│       ├── sdtrig_extension.c
+│       ├── system.c
+│       ├── zicntr_extension.c
+│       ├── zicsr_extension.c
+│       └── zifencei_extension.c
+├── run/                    # 示例程序和脚本
+│   ├── compile_run.sh      # 构建示例
+│   ├── run_tests.sh        # 测试运行器
+│   ├── build_tests.sh      # 测试构建器
+│   ├── self_test.c         # CLINT 定时器自测
+│   ├── run.c               # 模拟内核示例
+│   ├── link.ld             # 裸机链接脚本
+│   └── link_kernel.ld      # 内核链接脚本
+├── tests/                  # riscv-tests（子模块）
 └── LICENSE                 # GPLv3 许可证
 ```
 
-## ⚙️ CMake Targets
+## ⚙️ CMake 配置选项
 
-| Target | 说明 |
-|--------|------|
-| `make` / `make all` | 构建模拟器可执行文件 |
-| `make run` | 构建并运行 `run.bin` 示例 |
-| `make debug` | 以调试模式运行示例 |
-| `make build_tests` | 构建 riscv-tests |
-| `make run_tests` | 运行所有测试 |
-| `make tidy` | 使用 clang-format 格式化代码 |
-| `make rebuild` | 清理并重新构建 |
+| 选项 | 默认值 | 描述 |
+|--------|---------|-------------|
+| `CONFIG_ENABLE_DEBUGGER` | ON | 内置调试器（`-d` 标志） |
+| `CONFIG_SUPPORT_MISALIGN` | OFF | 支持非对齐内存访问（较慢） |
+| `CONFIG_ENABLE_M_EXTENSION` | ON | M：整数乘除法 |
+| `CONFIG_ENABLE_A_EXTENSION` | ON | A：原子操作 |
+| `CONFIG_ENABLE_C_EXTENSION` | ON | C：16 位压缩指令 |
+| `CONFIG_ENABLE_F_EXTENSION` | ON | F：单精度 FPU（需要 Zicsr） |
+| `CONFIG_ENABLE_D_EXTENSION` | ON | D：双精度 FPU（需要 F） |
+| `CONFIG_ENABLE_Q_EXTENSION` | ON | Q：四精度 FPU（需要 D） |
+| `CONFIG_ENABLE_ZFH_EXTENSION` | ON | Zfh：半精度 FPU（需要 F） |
+| `CONFIG_ENABLE_ZICSR_EXTENSION` | ON | Zicsr：CSR 指令 |
+| `CONFIG_ENABLE_ZICNTR_EXTENSION` | ON | Zicntr：计数器指令 |
+| `CONFIG_ENABLE_ZIFENCEI_EXTENSION` | ON | Zifencei：FENCE.I |
+| `CONFIG_ENABLE_ZICOND_EXTENSION` | ON | Zicond：条件操作指令 |
+| `CONFIG_ENABLE_UART_DEVICE` | ON | 0x10000000 处的 16550 UART |
+| `CONFIG_ENABLE_FDT` | ON | 设备树 Blob 生成器 |
+| `OPTIMIZE_FOR_SIZE` | OFF | 针对二进制大小优化（`-Os`） |
+| `ENABLE_LTO` | OFF | 链接时优化 |
+
+### 使用自定义扩展构建
+
+```bash
+cmake .. -DCONFIG_ENABLE_D_EXTENSION=OFF -DCONFIG_ENABLE_FDT=ON
+make
+```
 
 ## 📊 测试状态
 
-通过 `make run_tests` 运行测试，所有 `rv32ui-p-*`、`rv32um-p-*`、`rv32ua-p-*` 测试中：
+使用 `make run_tests` 运行测试。支持的测试套件：
 
-- ✅ **全部通过**（`rv32ui-p-ma_data` 除外，因该测试涉及异常/中断处理，当前版本仅模拟用户态指令行为）
-- ⏭️ `rv32ui-p-ma_data`：预期跳过（特权级/中断未实现）
+| 套件 | 测试内容 | 状态 |
+|-------|-------|--------|
+| `rv32ui-p-*` | 基础整数 | ✅ 全部通过 |
+| `rv32um-p-*` | M 扩展 | ✅ 全部通过 |
+| `rv32ua-p-*` | A 扩展 | ✅ 全部通过 |
+| `rv32uc-p-*` | C 扩展 | ✅ 全部通过 |
+| `rv32uf-p-*` | F 扩展 | ✅ 全部通过 |
+| `rv32ud-p-*` | D 扩展 | ✅ 全部通过 |
+| `rv32uzfh-p-*` | Zfh 扩展 | ✅ 全部通过 |
+| `rv32uzicond-p-*` | Zicond | ✅ 全部通过 |
+| `rv32mi-p-*` | 机器模式 | ✅ 全部通过 |
+| `rv32si-p-*` | 监管模式 | ✅ 全部通过 |
 
-预期测试输出示例：
+预期测试输出：
 ```
 [rv32ui-p-add] ✅ PASS
 [rv32ui-p-addi] ✅ PASS
-[rv32um-p-mul] ✅ PASS
-[rv32ua-p-amoadd] ✅ PASS
+[rv32uf-p-fadd] ✅ PASS
 ...
 ```
 
 ## 🎯 已知限制
 
-- 不支持特权级和中断/异常处理
-- 不支持 Zicsr 和 Zifencei 扩展（解码为 NOP）
-- 仅支持 Flat Binary 格式输入（不支持 ELF 直接加载）
-- 程序基址需与编译时链接脚本匹配
+- 仅支持扁平二进制格式（不支持直接加载 ELF；请使用 `objcopy -O binary`）（即将支持！）
+- 可移植性：可能无法在大端系统上工作（别碰那个神奇的解码器！我搞砸过好几次，又回滚了无数次）
+- 性能：启用所有扩展时非常慢（可能只有 130MIPS），而仅启用 "I" 时约为 270MIPS（也许以后会做 JIT？）
+
+## 🤝 贡献
+
+欢迎贡献！请随时提交 Issue 和 Pull Request。
 
 ## 📝 许可证
 
-本项目使用 [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) 许可证。
+本项目基于 [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) 许可证。
 
 ---
 
-*仅供教学和个人项目使用。欢迎贡献和反馈！*
+*仅供教育和个人使用。欢迎反馈和贡献！*

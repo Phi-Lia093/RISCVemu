@@ -9,23 +9,40 @@ SPDX-License-Identifier: GPL-3.0-or-later
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![C23](https://img.shields.io/badge/C-23-blue.svg)](https://en.cppreference.com/w/c/23)
 [![CMake](https://img.shields.io/badge/CMake-3.10+-green.svg)](https://cmake.org/)
-[![RISC-V](https://img.shields.io/badge/RISC--V-IMA(U)-red.svg)](https://riscv.org/)
+[![RISC-V](https://img.shields.io/badge/RISC--V-IMA(FDQ)C%20%26%20more-red.svg)](https://riscv.org/)
+[![Version](https://img.shields.io/badge/version-0.4-blue.svg)]()
 
-A pedagogical RV32IMA(U) instruction set simulator written in C23. Supports the base integer instruction set (I), multiply/divide extension (M), atomic operations extension (A), and user-mode (U) instruction decoding. Built for learning and exploring RISC-V architecture.
+A pedagogical RISC-V instruction set simulator written in C23. Supports base integer (I), multiply/divide (M), atomic (A), compressed (C), single/double/quad/half-precision floating-point (F/D/Q/Zfh), and a growing set of standard extensions. Built for learning and exploring RISC-V architecture, now with OpenSBI/OS boot support and a complete device tree.
 
 [中文文档](./README_CN.MD) | [English](./README.MD)
 
 ## ✨ Features
 
-- **Complete RV32I Base Integer ISA**: All integer instructions implemented
-- **M Extension**: Multiply/divide instructions
-- **A Extension**: Atomic operations (LR/SC, AMO\*)
-- **U-Mode Support**: User-mode instruction decoding; privileged instructions and Zicsr/Zifencei extensions are treated as NOPs
-- **4GB Memory Space**: Virtual page frame allocation with copy-on-write strategy for efficient memory usage
+### ISA Support
+- **RV32I Base Integer ISA**: All integer instructions implemented
+- **M Extension**: Integer multiplication/division
+- **A Extension**: Atomic operations (LR/SC, AMO*)
+- **C Extension**: 16-bit compressed instructions
+- **F/D/Q Extensions**: Single/Double/Quad-precision floating-point (requires Zicsr)
+- **Zfh Extension**: Half-precision floating-point
+- **Zicsr/Zifencei**: CSR instructions and FENCE.I
+- **Zicntr**: Counter instructions (cycle, instret, time)
+- **Zicond**: Conditional operations
+
+### System & Boot Support
+- **Machine/Supervisor/User Privilege Modes**: Full privilege-level support
+- **SV32 Page Tables**: Virtual memory with MMU
+- **CLINT Timer**: Core Local Interruptor with mtime/mtimecmp
+- **UART Emulation**: 16550-compatible at `0x10000000`
+- **Device Tree (FDT)**: Auto-generated Flattened Device Tree for OpenSBI/OS boot
+- **OpenSBI Integration**: Boot `fw_jump.bin` at `0x80000000` with next-stage kernel staging
+- **Multi-stage Binary Loading**: `--load FILE@HEX` for loading additional binaries (e.g., kernel, initrd)
+
+### Runtime & Debug
+- **4GB Memory Space**: Virtual page frame allocation with copy-on-write
 - **Interactive Debugger**: Single-step, register view/modify, memory read/write, disassembly, breakpoints
-- **UART Emulation**: Writes to `0x10000000` are stripped to chars and output directly to stdout
-- **Flat Binary Loading**: Load binary files to any specified base address
-- **riscv-tests Suite**: 100% PASS rate (excluding privilege-level dependent tests)
+- **Sdtrig Hardware Breakpoints**: Trigger module support for fetch breakpoints
+- **riscv-tests Suite**: Full test coverage for all supported extensions
 
 ## 📋 Dependencies
 
@@ -33,6 +50,9 @@ A pedagogical RV32IMA(U) instruction set simulator written in C23. Supports the 
 - C23-compatible compiler (GCC 13+ / Clang 16+)
 - CMake 3.10+
 - GNU Make
+- libsoftfloat (included as submodule or system package)
+- OpenSBI (optional, for SBI-based boot)
+- Linux (optional, experimental)
 
 ### Test Dependencies
 - [RISC-V GNU Toolchain](https://github.com/riscv-collab/riscv-gnu-toolchain) (`riscv32-unknown-elf-gcc`, `riscv32-unknown-elf-objcopy`)
@@ -52,32 +72,56 @@ cmake ..
 make
 ```
 
-### Running a Program
+### Running Bare-Metal Programs
 
 ```bash
 # Basic usage
 ./RISCVemu <program.bin> <base_address>
 
-# Example: Load run.bin at 0x1000
+# Example: Load run.bin at 0x1000 (CLINT self-test)
 ./RISCVemu run.bin 0x1000
 
 # Start with debugger enabled
 ./RISCVemu run.bin 0x1000 -d
-
-# Set a breakpoint
-./RISCVemu run.bin 0x1000 -d -b 0x1200
 ```
 
-### Running the Test Suite
+### Running OpenSBI + Kernel (OS Boot)
 
 ```bash
-# First-time setup: initialize riscv-tests submodule
-git submodule update --init
-cd tests && git submodule update --init && cd ..
+# Boot OpenSBI fw_jump with a kernel staged at 0x80400000
+./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000
 
-# Build test programs and run
-make build_tests   # Compile riscv-tests and convert to bin format
-make run_tests     # Run all tests
+# With debugger
+./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 -d
+```
+
+### CMake Convenience Targets
+
+```bash
+make run          # Run OpenSBI + kernel boot demo
+make run_sbi_debug # Same with debugger enabled
+make run_selftest # Run CLINT timer self-test
+make debug        # Run self-test in debug mode
+make build_tests  # Build riscv-tests
+make run_tests    # Run all tests
+```
+
+## 🔧 CLI Options
+
+```
+Usage: ./RISCVemu <program_file> <program_base> [options]
+Options:
+  -L, --load FILE@HEX   Load an extra binary into RAM at the given address
+                         (repeatable; e.g., OpenSBI next-stage kernel).
+  -d, --debug           Enable single-step debug mode
+  -b, --breakpoint      Set breakpoint address (hex format)
+  -F, --fdt[=addr]      Build and hand a device tree to firmware in a1
+                         (a0=hartid 0); addr defaults to 0x87f00000
+  -h, --help            Show this help message
+
+Examples:
+  ./RISCVemu test.bin 0x1000 -d -b 0x1200
+  ./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000
 ```
 
 ## 🔧 Debugger Commands
@@ -91,7 +135,7 @@ Launch with `-d` flag to enter interactive debug mode:
 | `q` | Quit emulator |
 | `r` | Display all registers |
 | `p <addr>` | Set Program Counter |
-| `R <reg> <val>` | Set register value (supports number or name, e.g., `a0`, `sp`) |
+| `R <reg> <val>` | Set register value (supports number or name) |
 | `m <addr>` | Display 32-bit value at address |
 | `d <start> <end>` | Dump memory range |
 | `B <addr> [count]` | Dump bytes (default 16) |
@@ -108,71 +152,123 @@ Launch with `-d` flag to enter interactive debug mode:
 
 ```
 RISCVemu/
-├── CMakeLists.txt          # CMake build configuration
+├── CMakeLists.txt          # CMake build with configurable extensions
+├── config.h.in             # Build-time configuration template
 ├── include/                # Public headers
 │   ├── debugger.h          # Debugger interface
 │   ├── disasm.h            # Disassembler
 │   ├── emu.h               # Core emulator state
 │   ├── exec.h              # Instruction execution engine
-│   ├── fmap.h              # Memory mapping utilities
+│   ├── fmap.h              # File mapping utilities
 │   ├── logger.h            # Logging system
 │   ├── mem.h               # Memory management
+│   ├── mmu.h               # SV32 MMU implementation
+│   ├── device/             # Device emulation
+│   │   ├── clint.h         # CLINT timer
+│   │   ├── fdt.h           # Flattened Device Tree generator
+│   │   └── uart.h          # 16550 UART
 │   └── extension/          # Extension instruction headers
+│       ├── a_extension.h
+│       ├── c_extension.h
+│       ├── f_extension.h
+│       ├── m_extension.h
+│       ├── sdtrig_extension.h
+│       ├── system.h
+│       ├── zicntr_extension.h
+│       ├── zicond_extension.h
+│       ├── zicsr_extension.h
+│       └── zifencei_extension.h
 ├── src/                    # Source code
-│   ├── debugger.c          # Debugger implementation
-│   ├── disasm.c            # Disassembler implementation
-│   ├── emu.c               # Main program entry
-│   ├── exec.c              # Instruction execution core
-│   ├── fmap.c              # File mapping
-│   ├── logger.c            # Logging implementation
-│   ├── mem.c               # Memory management
-│   └── extension/          # Extension instruction implementations (M/A)
-├── run/                    # Example programs
-│   ├── compile_run.sh      # Build example script
-│   ├── link.ld             # Linker script
-│   ├── run.c               # Example C program
-│   └── run.bin             # Pre-built binary
+│   ├── debugger.c
+│   ├── disasm.c
+│   ├── emu.c
+│   ├── exec.c
+│   ├── fmap.c
+│   ├── logger.c
+│   ├── mem.c
+│   ├── device/
+│   │   ├── clint.c
+│   │   └── fdt.c
+│   └── extension/
+│       ├── c_extension.c
+│       ├── f_extension.c
+│       ├── m_extension.c
+│       ├── sdtrig_extension.c
+│       ├── system.c
+│       ├── zicntr_extension.c
+│       ├── zicsr_extension.c
+│       └── zifencei_extension.c
+├── run/                    # Example programs and scripts
+│   ├── compile_run.sh      # Build examples
+│   ├── run_tests.sh        # Test runner
+│   ├── build_tests.sh      # Test builder
+│   ├── self_test.c         # CLINT timer self-test
+│   ├── run.c               # Fake kernel example
+│   ├── link.ld             # Bare-metal linker script
+│   └── link_kernel.ld      # Kernel linker script
 ├── tests/                  # riscv-tests (submodule)
-│   ├── isa/                # ISA tests
-│   ├── benchmarks/         # Benchmark tests
-│   └── ...
 └── LICENSE                 # GPLv3 License
 ```
 
-## ⚙️ CMake Targets
+## ⚙️ CMake Configuration Options
 
-| Target | Description |
-|--------|-------------|
-| `make` / `make all` | Build emulator executable |
-| `make run` | Build and run `run.bin` example |
-| `make debug` | Run example in debug mode |
-| `make build_tests` | Build riscv-tests |
-| `make run_tests` | Run all tests |
-| `make tidy` | Format code with clang-format |
-| `make rebuild` | Clean and rebuild |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `CONFIG_ENABLE_DEBUGGER` | ON | Built-in debugger (`-d` flag) |
+| `CONFIG_SUPPORT_MISALIGN` | OFF | Support misaligned memory access (slower) |
+| `CONFIG_ENABLE_M_EXTENSION` | ON | M: Integer Multiplication/Division |
+| `CONFIG_ENABLE_A_EXTENSION` | ON | A: Atomic Operations |
+| `CONFIG_ENABLE_C_EXTENSION` | ON | C: 16-bit Compressed Instructions |
+| `CONFIG_ENABLE_F_EXTENSION` | ON | F: Single-Precision FPU (requires Zicsr) |
+| `CONFIG_ENABLE_D_EXTENSION` | ON | D: Double-Precision FPU (requires F) |
+| `CONFIG_ENABLE_Q_EXTENSION` | ON | Q: Quad-Precision FPU (requires D) |
+| `CONFIG_ENABLE_ZFH_EXTENSION` | ON | Zfh: Half-Precision FPU (requires F) |
+| `CONFIG_ENABLE_ZICSR_EXTENSION` | ON | Zicsr: CSR Instructions |
+| `CONFIG_ENABLE_ZICNTR_EXTENSION` | ON | Zicntr: Counter Instructions |
+| `CONFIG_ENABLE_ZIFENCEI_EXTENSION` | ON | Zifencei: FENCE.I |
+| `CONFIG_ENABLE_ZICOND_EXTENSION` | ON | Zicond: Conditional Instructions |
+| `CONFIG_ENABLE_UART_DEVICE` | ON | 16550 UART at 0x10000000 |
+| `CONFIG_ENABLE_FDT` | ON | Device Tree Blob generator |
+| `OPTIMIZE_FOR_SIZE` | OFF | Optimize for binary size (`-Os`) |
+| `ENABLE_LTO` | OFF | Link Time Optimization |
+
+### Building with custom extensions
+
+```bash
+cmake .. -DCONFIG_ENABLE_D_EXTENSION=OFF -DCONFIG_ENABLE_FDT=ON
+make
+```
 
 ## 📊 Test Status
 
-Run tests with `make run_tests`. All `rv32ui-p-*`, `rv32um-p-*`, `rv32ua-p-*` tests:
+Run tests with `make run_tests`. Supported test suites:
 
-- ✅ **All passing** (except `rv32ui-p-ma_data`, which requires exception/interrupt handling not yet implemented in user-mode simulation)
-- ⏭️ `rv32ui-p-ma_data`: Skipped (privilege/interrupt mechanism not implemented)
+| Suite | Tests | Status |
+|-------|-------|--------|
+| `rv32ui-p-*` | Base integer | ✅ All passing |
+| `rv32um-p-*` | M extension | ✅ All passing |
+| `rv32ua-p-*` | A extension | ✅ All passing |
+| `rv32uc-p-*` | C extension | ✅ All passing |
+| `rv32uf-p-*` | F extension | ✅ All passing |
+| `rv32ud-p-*` | D extension | ✅ All passing |
+| `rv32uzfh-p-*` | Zfh extension | ✅ All passing |
+| `rv32uzicond-p-*` | Zicond | ✅ All passing |
+| `rv32mi-p-*` | Machine-mode | ✅ All passing |
+| `rv32si-p-*` | Supervisor-mode | ✅ All passing |
 
 Expected test output:
 ```
 [rv32ui-p-add] ✅ PASS
 [rv32ui-p-addi] ✅ PASS
-[rv32um-p-mul] ✅ PASS
-[rv32ua-p-amoadd] ✅ PASS
+[rv32uf-p-fadd] ✅ PASS
 ...
 ```
 
 ## 🎯 Known Limitations
 
-- No privilege-level or interrupt/exception handling
-- No Zicsr or Zifencei extension support (decoded as NOPs)
-- Flat binary format only (no direct ELF loading)
-- Program base address must match linker script configuration
+- Flat binary format only (no direct ELF loading; use `objcopy -O binary`) (will be done soon!)
+- Portability: may not work on big-endian systems (DO NOT TOUCH THE MAGICAL DECODER! I've f**ked it and reverted thousands of times)
+- Performance: very slow if all extensions are enabled (maybe only 130MIPS) vs 270 MIPS if only "I" is enabled (maybe JIT?)
 
 ## 🤝 Contributing
 
