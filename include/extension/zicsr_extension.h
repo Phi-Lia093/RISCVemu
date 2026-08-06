@@ -168,6 +168,13 @@ check_csr_access(uint32_t csr, uint32_t ins)
         raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins);
         return;
     }
+    // When mstatus.TVM is set, S-mode reads/writes of satp are illegal.
+    if (csr == CSR_SATP && g_state.privilege == PRV_SUPERVISOR
+        && (csr_table[CSR_MSTATUS].value & MSTATUS_TVM))
+    {
+        raise_exception(CAUSE_ILLEGAL_INSTRUCTION, ins);
+        return;
+    }
 }
 
 void init_csr_table(void);

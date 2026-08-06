@@ -116,7 +116,19 @@ ins_mret(void)
 void
 ins_sret(void)
 {
-    uint32_t sstatus_val = csr_table[CSR_SSTATUS].value;
+    // Per the privileged spec: when mstatus.TSR is set, an SRET executed in
+    // S-mode raises an illegal-instruction exception.
+    if (g_state.privilege == PRV_SUPERVISOR
+        && (csr_table[CSR_MSTATUS].value & MSTATUS_TSR))
+    {
+        raise_illegal(0x10200073);
+        return;
+    }
+
+    // sstatus aliases mstatus, so it must be read/written through
+    // sstatus_read/sstatus_write (csr_read/csr_write) rather than touching the
+    // raw CSR_SSTATUS backing field which is never kept in sync.
+    uint32_t sstatus_val = csr_read(CSR_SSTATUS);
     uint32_t spp = (sstatus_val >> 8) & 1;
 
     if (sstatus_val & (1 << 5))
@@ -129,10 +141,10 @@ ins_sret(void)
     }
 
     sstatus_val = (sstatus_val | (1 << 5)) & ~(1 << 8);
-    csr_table[CSR_SSTATUS].value = sstatus_val;
+    csr_write(CSR_SSTATUS, sstatus_val);
 
     g_state.privilege = spp ? PRV_SUPERVISOR : PRV_USER;
-    g_state.pc = csr_table[CSR_SEPC].value - 4;
+    g_state.pc = csr_read(CSR_SEPC) - 4;
 }
 
 void
@@ -162,6 +174,14 @@ ins_sctrclr(void)
 void
 ins_sfence_vma(void)
 {
+    // Per the privileged spec: when mstatus.TVM is set, an SFENCE.VMA executed
+    // in S-mode raises an illegal-instruction exception.
+    if (g_state.privilege == PRV_SUPERVISOR
+        && (csr_table[CSR_MSTATUS].value & MSTATUS_TVM))
+    {
+        raise_illegal(0x12000073);
+        return;
+    }
     debug("SFENCE.VMA executed, ignoring");
 }
 
@@ -200,7 +220,11 @@ raise_exception_pc(uint32_t cause, uint32_t tval, uint32_t epc)
     else if (current_privilege == PRV_SUPERVISOR)
     {
         uint32_t medeleg = csr_read(CSR_MEDELEG);
-        delegate_to_s = (medeleg & (1 << cause)) == 0;
+        // Per the privileged spec, a trap from S-mode is taken in S-mode iff
+        // the corresponding medeleg bit is set; otherwise it escalates to M
+        // mode.  (OpenSBI leaves supervisor ecall, cause 9, *un*delegated so
+        // SBI calls from the kernel are serviced in M-mode.)
+        delegate_to_s = (medeleg & (1 << cause)) != 0;
     }
     else
     {
@@ -288,58 +312,87 @@ check_and_handle_interrupts(void)
     uint32_t mip = csr_read(CSR_MIP);
     uint32_t mie = csr_read(CSR_MIE);
     uint32_t mstatus = csr_read(CSR_MSTATUS);
+    uint32_t mideleg = csr_read(CSR_MIDELEG);
     uint32_t sip = csr_read(CSR_SIP);
     uint32_t sie = csr_read(CSR_SIE);
-    uint32_t sstatus = csr_read(CSR_SSTATUS);
 
+    if (g_state.privilege == PRV_MACHINE)
+    {
+        // Machine mode: machine-level interrupts, gated by mstatus.MIE only.
+        // (A trap taken from M-mode is never delegated to S-mode per the spec.)
+        if ((mstatus & MSTATUS_MIE) == 0) return;
+        uint32_t pending = mip & mie;
+        if (!pending) return;
+        int irq = -1;
+        if (pending & MIP_MEIP)
+            irq = 11;
+        else if (pending & MIP_MSIP)
+            irq = 3;
+        else if (pending & MIP_MTIP)
+            irq = 7;
+        else if (pending & MIP_SEIP)
+            irq = 9;
+        else if (pending & MIP_SSIP)
+            irq = 1;
+        else if (pending & MIP_STIP)
+            irq = 5;
+        if (irq >= 0)
+        {
+            debug("Taking M-mode interrupt: irq=%d", irq);
+            raise_interrupt(irq);
+        }
+        return;
+    }
+
+    // S/U mode.  A supervisor-visible interrupt that is both delegated
+    // (mideleg) and locally enabled (sie) is taken in S/U, gated by the
+    // appropriate global interrupt bit (SIE in supervisor, UIE in user).
+    uint32_t global_en = (mstatus & ((g_state.privilege == PRV_SUPERVISOR)
+                                         ? MSTATUS_SIE
+                                         : MSTATUS_UIE));
+    if (global_en)
+    {
+        uint32_t sp = sip & sie & mideleg;
+        int irq = -1;
+        if (sp & MIP_SEIP)
+            irq = 9;
+        else if (sp & MIP_SSIP)
+            irq = 1;
+        else if (sp & MIP_STIP)
+            irq = 5;
+        if (irq >= 0)
+        {
+            debug("Taking S-mode interrupt: irq=%d", irq);
+            raise_interrupt(irq);
+            return;
+        }
+    }
+
+    // Otherwise the line escalates to M-mode: only non-delegated lines are
+    // considered here (delegated lines belong to the S path above and stay
+    // pending if S has interrupts disabled), gated by mstatus.MIE.
     if (mstatus & MSTATUS_MIE)
     {
-        uint32_t pending = mip & mie;
-        if (pending)
+        uint32_t mp = (mip & mie) & ~(sip & sie & mideleg);
+        if (mp)
         {
             int irq = -1;
-            if (pending & MIP_MEIP)
+            if (mp & MIP_MEIP)
                 irq = 11;
-            else if (pending & MIP_MSIP)
+            else if (mp & MIP_MSIP)
                 irq = 3;
-            else if (pending & MIP_MTIP)
+            else if (mp & MIP_MTIP)
                 irq = 7;
-            else if (pending & MIP_SEIP)
+            else if (mp & MIP_SEIP)
                 irq = 9;
-            else if (pending & MIP_SSIP)
+            else if (mp & MIP_SSIP)
                 irq = 1;
-            else if (pending & MIP_STIP)
+            else if (mp & MIP_STIP)
                 irq = 5;
-
             if (irq >= 0)
             {
                 debug("Taking M-mode interrupt: irq=%d", irq);
                 raise_interrupt(irq);
-                return;
-            }
-        }
-    }
-
-    if (sstatus & (1 << 1))
-    {
-        uint32_t pending = sip & sie;
-        if (pending)
-        {
-            uint32_t mideleg = csr_read(CSR_MIDELEG);
-            int irq = -1;
-
-            if ((pending & MIP_SEIP) && (mideleg & MIP_SEIP))
-                irq = 9;
-            else if ((pending & MIP_SSIP) && (mideleg & MIP_SSIP))
-                irq = 1;
-            else if ((pending & MIP_STIP) && (mideleg & MIP_STIP))
-                irq = 5;
-
-            if (irq >= 0)
-            {
-                debug("Taking S-mode interrupt: irq=%d", irq);
-                raise_interrupt(irq);
-                return;
             }
         }
     }
@@ -356,17 +409,20 @@ raise_interrupt(uint32_t irq)
     bool delegate_to_s = false;
     uint32_t mideleg = csr_read(CSR_MIDELEG);
 
-    if (current_privilege == PRV_MACHINE)
+    // Per the privileged spec, an interrupt is only delegated to S-mode when
+    // it is taken from S- or U-mode and the corresponding mideleg bit is set.
+    // A trap taken from M-mode is never delegated.
+    if (current_privilege == PRV_USER)
     {
         delegate_to_s = (mideleg & (1 << irq)) != 0;
     }
     else if (current_privilege == PRV_SUPERVISOR)
     {
-        delegate_to_s = true;
+        delegate_to_s = (mideleg & (1 << irq)) != 0;
     }
     else
     {
-        delegate_to_s = (mideleg & (1 << irq)) != 0;
+        delegate_to_s = false;
     }
 
     if (delegate_to_s)

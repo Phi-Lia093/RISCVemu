@@ -123,6 +123,13 @@ add_custom_target(run_selftest
     VERBATIM
 )
 
+add_custom_target(run_kernel
+    COMMAND ${PROJECT_NAME} fw_jump.bin 0x80000000 --fdt --load Image@0x80400000
+    WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
+    DEPENDS ${PROJECT_NAME} compile_run
+    VERBATIM
+)
+
 add_custom_target(debug
     COMMAND ${PROJECT_NAME} run.bin 0x1000 -d
     WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/

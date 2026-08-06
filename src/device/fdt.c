@@ -516,6 +516,13 @@ fdt_build_riscvemu(uint32_t addr)
      * sbi_printf output reaches the emulated UART instead of being dropped. */
     h = fdt_prop_str(h, "stdout-path", "/soc/uart@10000000");
     if (!h) return 0;
+    /* Pass a kernel command line that enables earlycon (sourced from
+     * stdout-path) plus the real 8250 console, so Linux prints its banner and
+     * any earlier panic message to the emulated UART. */
+    h = fdt_prop_str(h, "bootargs",
+                     "earlycon console=ttyS0,115200n8 root=/dev/ram0 rw "
+                     "rdinit=/init");
+    if (!h) return 0;
     h = fdt_node_pop(h);
     if (!h) return 0;
 
@@ -548,8 +555,28 @@ fdt_build_riscvemu(uint32_t addr)
     if (!h) return 0;
     h = fdt_prop_str(h, "compatible", "riscv");
     if (!h) return 0;
+    /* OpenSBI's fdt_cpu_fixup disables any HART DT node lacking an mmu-type
+     * property (it treats a missing/bad mmu-type as "MMU not available" and
+     * writes status="disabled").  Without this, the boot hart is disabled,
+     * Linux drops cpu@0, the riscv,cpu-intc parent walk fails, and init_IRQ
+     * panics "No interrupt controller found".  This machine implements SV32.
+     */
+    h = fdt_prop_str(h, "mmu-type", "riscv,sv32");
+    if (!h) return 0;
     h = fdt_prop_str(h, "riscv,isa", "rv32i2p1_m2p0_a2p1_f2p2_c2p0_zicsr2p0");
     if (!h) return 0;
+    /* Modern DT interface (Linux 6.18+ requires these for CPU discovery;
+     * CONFIG_RISCV_ISA_FALLBACK is typically off, so the old `riscv,isa`
+     * string alone is not enough and the boot CPU would be rejected. */
+    h = fdt_prop_str(h, "riscv,isa-base", "rv32i");
+    if (!h) return 0;
+    {
+        /* riscv,isa-extensions is a DT string-list: NUL-terminated strings. */
+        static const char ext[] =
+            "i\0m\0a\0f\0c\0zicsr\0zifencei\0zicntr\0";
+        h = fdt_prop_bytes(h, "riscv,isa-extensions", ext, sizeof(ext));
+        if (!h) return 0;
+    }
 
     /* --- /cpus/cpu@0/interrupt-controller --- */
     h = fdt_node_push(h, "interrupt-controller");

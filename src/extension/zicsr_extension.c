@@ -259,7 +259,16 @@ set_sie(uint32_t val)
 static uint32_t
 get_sip(void)
 {
-    return csr_read(CSR_MIP) & SIP_SIE_S_BITS;
+    uint32_t sip = csr_read(CSR_MIP) & SIP_SIE_S_BITS;
+    // The CLINT timer interrupt is presented to S-mode on the STIP line
+    // (bit 5), mirroring MIP.MTIP (bit 7).  This is what lets a delegated
+    // timer interrupt reach the S-mode guest clockevent driver; without it
+    // Linux never sees STIP and busy-waits in __delay/udelay forever.
+    if (clint_mtip_pending())
+    {
+        sip |= MIP_STIP;
+    }
+    return sip;
 }
 
 static void
@@ -390,25 +399,12 @@ init_csr_table(void)
     csr_table[CSR_MNSTATUS]
         = (struct csr_operation){ 1, PRV_MACHINE, RW, 0, get_mnstatus, NULL };
 
-    // Machine Counters
-    csr_table[CSR_CYCLE_LO]
-        = (struct csr_operation){ 1, PRV_MACHINE,        RO,
-                                  0, get_zicntr_cycle_l, NULL };
-    csr_table[CSR_CYCLE_HI]
-        = (struct csr_operation){ 1, PRV_MACHINE,        RO,
-                                  0, get_zicntr_cycle_h, NULL };
-    csr_table[CSR_TIME_LO] = (struct csr_operation){
-        1, PRV_MACHINE, RO, 0, get_zicntr_time_l, NULL
-    };
-    csr_table[CSR_TIME_HI] = (struct csr_operation){
-        1, PRV_MACHINE, RO, 0, get_zicntr_time_h, NULL
-    };
-    csr_table[CSR_INSTRET_LO]
-        = (struct csr_operation){ 1, PRV_MACHINE,          RO,
-                                  0, get_zicntr_instret_l, NULL };
-    csr_table[CSR_INSTRET_HI]
-        = (struct csr_operation){ 1, PRV_MACHINE,          RO,
-                                  0, get_zicntr_instret_h, NULL };
+    // NOTE: The user-level cycle/time/instret CSRs (0xC00-0xC1F) are registered
+    // above under CONFIG_ENABLE_ZICNTR_EXTENSION as PRV_USER.  They must NOT be
+    // re-registered here as PRV_MACHINE: doing so would make S-mode rdtime /
+    // rdcycle / rdinstret raise an illegal-instruction fault (the Linux kernel
+    // reads `time` at 0xC01 from S-mode right after MMU bring-up and spins
+    // forever if that traps).
 
     // Writable machine counter/hang CSRs (mcountinhibit, mcycle, minstret)
     // Register as RW so M-mode writes take effect (rv32mi/instret_overflow.S).
