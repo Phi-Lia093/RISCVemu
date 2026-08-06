@@ -347,9 +347,10 @@ check_and_handle_interrupts(void)
     // S/U mode.  A supervisor-visible interrupt that is both delegated
     // (mideleg) and locally enabled (sie) is taken in S/U, gated by the
     // appropriate global interrupt bit (SIE in supervisor, UIE in user).
-    uint32_t global_en = (mstatus & ((g_state.privilege == PRV_SUPERVISOR)
-                                         ? MSTATUS_SIE
-                                         : MSTATUS_UIE));
+    uint32_t global_en
+        = (mstatus
+           & ((g_state.privilege == PRV_SUPERVISOR) ? MSTATUS_SIE
+                                                    : MSTATUS_UIE));
     if (global_en)
     {
         uint32_t sp = sip & sie & mideleg;

@@ -29,6 +29,9 @@
 #include <device/clint.h>
 #include <device/fdt.h>
 #include <emu.h>
+#ifdef CONFIG_ENABLE_PLIC_DEVICE
+#include <device/plic.h>
+#endif
 #ifdef CONFIG_ENABLE_UART_DEVICE
 #include <device/uart.h>
 #endif
@@ -397,9 +400,14 @@ fdt_serialize(fdt_handle_t h)
 /* phandle handed to /cpus/cpu@0/interrupt-controller. */
 #define FDT_CPU_INTC_PHANDLE 1u
 
+/* phandle handed to /soc/plic@... (external interrupt controller). */
+#define FDT_PLIC_PHANDLE 2u
+
 /* RISC-V standard local interrupt numbers (dt-binding: sifive,clint). */
 #define IRQ_M_SOFT 3u
 #define IRQ_M_TIMER 7u
+#define IRQ_M_EXT 11u
+#define IRQ_S_EXT 9u
 
 /* Free-running CLINT counter frequency reported to firmware (per tick). */
 #define FDT_TIMEBASE_FREQ 10000000u
@@ -434,6 +442,48 @@ fdt_build_clint(fdt_handle_t h)
     return h;
 }
 
+#ifdef CONFIG_ENABLE_PLIC_DEVICE
+/*
+ * Add the /soc/plic@... node describing the externally-mapped interrupt
+ * controller (0x0C000000).  Both the machine external line (IRQ_M_EXT, 11) and
+ * the supervisor external line (IRQ_S_EXT, 9) are connected to the sole hart
+ * local interrupt controller, matching OpenSBI's and Linux's riscv,plic0
+ * expectations so the UART's interrupt line can be wired correctly.
+ */
+static fdt_handle_t
+fdt_build_plic(fdt_handle_t h)
+{
+    h = fdt_node_push(h, "plic@c000000");
+    if (!h) return 0;
+    /* compatible = "sifive,plic-1.0.0", "riscv,plic0" (single string-list). */
+    {
+        static const char plic_comp[] = "sifive,plic-1.0.0\0riscv,plic0\0";
+        h = fdt_prop_bytes(h, "compatible", plic_comp, sizeof(plic_comp));
+        if (!h) return 0;
+    }
+    h = fdt_prop_word(h, "reg", 0x0, PLIC_BASE, 0x0, PLIC_SIZE);
+    if (!h) return 0;
+    h = fdt_prop_cells1(h, "#address-cells", 0);
+    if (!h) return 0;
+    h = fdt_prop_cells1(h, "#interrupt-cells", 1);
+    if (!h) return 0;
+    h = fdt_prop_cells1(h, "phandle", FDT_PLIC_PHANDLE);
+    if (!h) return 0;
+    h = fdt_prop_empty(h, "interrupt-controller");
+    if (!h) return 0;
+    /* Highest external interrupt source index exposed (linux/riscv_plic reads
+     * this to size its priority/enable arrays). */
+    h = fdt_prop_cells1(h, "riscv,ndev", PLIC_NDEV);
+    if (!h) return 0;
+    /* interrupts-extended = <&cpu_intc 11> <&cpu_intc 9> */
+    h = fdt_prop_word(h, "interrupts-extended", FDT_CPU_INTC_PHANDLE, IRQ_M_EXT,
+                      FDT_CPU_INTC_PHANDLE, IRQ_S_EXT);
+    if (!h) return 0;
+    h = fdt_node_pop(h);
+    return h;
+}
+#endif /* CONFIG_ENABLE_PLIC_DEVICE */
+
 #ifdef CONFIG_ENABLE_UART_DEVICE
 /*
  * Add the /soc/uart@... node describing the emulated 16550 UART to the
@@ -460,6 +510,15 @@ fdt_build_uart(fdt_handle_t h)
     if (!h) return 0;
     h = fdt_prop_cells1(h, "reg-io-width", 1);
     if (!h) return 0;
+#ifdef CONFIG_ENABLE_PLIC_DEVICE
+    /* Bind the UART to the PLIC's external interrupt line 10, giving the
+     * 8250 driver a valid IRQ so open("/dev/ttyS0") succeeds and RX data can
+     * drive an interrupt. */
+    h = fdt_prop_interrupt_parent(h, FDT_PLIC_PHANDLE);
+    if (!h) return 0;
+    h = fdt_prop_cells1(h, "interrupts", UART_IRQ);
+    if (!h) return 0;
+#endif
     h = fdt_node_pop(h);
     return h;
 }
@@ -572,8 +631,7 @@ fdt_build_riscvemu(uint32_t addr)
     if (!h) return 0;
     {
         /* riscv,isa-extensions is a DT string-list: NUL-terminated strings. */
-        static const char ext[] =
-            "i\0m\0a\0f\0c\0zicsr\0zifencei\0zicntr\0";
+        static const char ext[] = "i\0m\0a\0f\0c\0zicsr\0zifencei\0zicntr\0";
         h = fdt_prop_bytes(h, "riscv,isa-extensions", ext, sizeof(ext));
         if (!h) return 0;
     }
@@ -612,6 +670,10 @@ fdt_build_riscvemu(uint32_t addr)
      * as one fdt_build_* call inside the open /soc node. */
     h = fdt_build_clint(h);
     if (!h) return 0;
+#ifdef CONFIG_ENABLE_PLIC_DEVICE
+    h = fdt_build_plic(h);
+    if (!h) return 0;
+#endif
 #ifdef CONFIG_ENABLE_UART_DEVICE
     h = fdt_build_uart(h);
     if (!h) return 0;

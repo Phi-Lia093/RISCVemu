@@ -20,6 +20,9 @@
 
 #include <config.h>
 #include <device/clint.h>
+#ifdef CONFIG_ENABLE_PLIC_DEVICE
+#include <device/plic.h>
+#endif
 #include <emu.h>
 #include <exec.h>
 #include <extension/system.h>
@@ -141,6 +144,15 @@ get_mip(void)
     {
         mip &= ~MIP_MTIP;
     }
+#ifdef CONFIG_ENABLE_PLIC_DEVICE
+    // MIP.MEIP is a live view of the PLIC: pending while an enabled,
+    // non-thresholded external source is active.  Software clears it via the
+    // claim/complete handshake in the PLIC registers.
+    if (plic_external_pending())
+        mip |= MIP_MEIP;
+    else
+        mip &= ~MIP_MEIP;
+#endif
     return mip;
 }
 static uint32_t

@@ -390,6 +390,11 @@ main(int argc, char **argv)
 
     info("starting execution at PC=0x%x", g_state.pc);
 
+#ifdef CONFIG_ENABLE_UART_DEVICE
+    /* Enable async host-stdin RX before the guest runs. */
+    uart_input_setup();
+#endif
+
     // The riscv-tests harness reports the conclusion of a test that traps
     // (e.g. an ECALL swallowed by the trap vector) by spinning forever in the
     // "write_tohost" loop, signalled via the `tohost` symbol. A plain-function
@@ -419,6 +424,9 @@ main(int argc, char **argv)
     while (!g_state.terminated)
     {
         check_and_handle_interrupts();
+#ifdef CONFIG_ENABLE_UART_DEVICE
+        uart_poll_input();
+#endif
         if (g_state.pc >= MEM_SIZE)
         {
             fatal("PC out of bounds: 0x%x", g_state.pc);
@@ -532,6 +540,9 @@ main(int argc, char **argv)
         // debugger is compiled out.
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
         check_and_handle_interrupts();
+#endif
+#ifdef CONFIG_ENABLE_UART_DEVICE
+        uart_poll_input();
 #endif
         if (g_state.pc >= MEM_SIZE)
         {

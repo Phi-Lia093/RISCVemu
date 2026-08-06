@@ -30,6 +30,9 @@
 #ifdef CONFIG_ENABLE_UART_DEVICE
 #include <device/uart.h>
 #endif
+#ifdef CONFIG_ENABLE_PLIC_DEVICE
+#include <device/plic.h>
+#endif
 #include <device/clint.h>
 
 #define MEM_SIZE (4 * 1024 * 1024 * 1024L - 4096L)
@@ -48,6 +51,13 @@ mem_read8_unsigned(uint32_t addr)
     if (addr >= UART_BASE && addr < UART_BASE + UART_NREGS)
     {
         return (uint32_t)uart_read(addr - UART_BASE);
+    }
+#endif
+#ifdef CONFIG_ENABLE_PLIC_DEVICE
+    if (addr >= PLIC_BASE && addr < PLIC_BASE + 0x10000)
+    {
+        uint32_t w = plic_read32(addr - PLIC_BASE);
+        return (w >> ((addr & 3u) * 8)) & 0xFFu;
     }
 #endif
     if (unlikely(addr >= MEM_SIZE)) return 0;
@@ -79,6 +89,20 @@ mem_write8(uint32_t addr, uint8_t val)
     if (addr >= UART_BASE && addr < UART_BASE + UART_NREGS)
     {
         uart_write(addr - UART_BASE, val);
+        return;
+    }
+#endif
+#ifdef CONFIG_ENABLE_PLIC_DEVICE
+    if (addr >= PLIC_BASE && addr < PLIC_BASE + 0x10000)
+    {
+        uint32_t off = addr - PLIC_BASE;
+        /* PLIC registers are 32-bit; the RISC-V PLIC spec says registers are
+         * word addressed and that accesses are only defined at word
+         * granularity.  Merge a byte write into the aligned word to be safe. */
+        uint32_t cur = plic_read32(off & ~3u);
+        cur &= ~(0xFFu << ((off & 3u) * 8));
+        cur |= (uint32_t)val << ((off & 3u) * 8);
+        plic_write32(off & ~3u, cur);
         return;
     }
 #endif
@@ -138,6 +162,15 @@ mem_read32_unsigned(uint32_t addr)
         return v;
     }
 #endif
+#ifdef CONFIG_ENABLE_PLIC_DEVICE
+    if (addr >= PLIC_BASE && addr < PLIC_BASE + PLIC_SIZE)
+    {
+        /* PLIC registers are 32-bit; the RISC-V PLIC spec requires that the
+         * driver issue word accesses, but a 32-bit CPU may split into smaller
+         * transactions, so gather bytes from the word read. */
+        return plic_read32(addr - PLIC_BASE);
+    }
+#endif
     if (unlikely(addr >= MEM_SIZE - 3)) return 0;
     return *(uint32_t *)(g_state.main_memory + addr);
 }
@@ -162,6 +195,13 @@ mem_write32(uint32_t addr, uint32_t val)
     {
         for (int i = 0; i < 4 && (addr + i) < UART_BASE + UART_NREGS; i++)
             uart_write(addr - UART_BASE + i, (uint8_t)(val >> (i * 8)));
+        return;
+    }
+#endif
+#ifdef CONFIG_ENABLE_PLIC_DEVICE
+    if (addr >= PLIC_BASE && addr < PLIC_BASE + PLIC_SIZE)
+    {
+        plic_write32(addr - PLIC_BASE, val);
         return;
     }
 #endif

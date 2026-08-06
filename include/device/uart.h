@@ -26,54 +26,48 @@
 #ifdef CONFIG_ENABLE_UART_DEVICE
 
 #include <stdint.h>
-#include <stdio.h>
 
-// A minimal 16550-compatible UART for console output, mapped at 0x10000000
-// (the QEMU/LiteX virt UART0 address used by OpenSBI's sifive-uart/uart16550
-// early console).  Only output is modeled:
-//   - THR (offset 0, DLAB=0) write emits the byte.
-//   - LSR (offset 5) reports the transmit-holding-register empty (THRE) and
-//     transmitter-empty (TEMT) bits so firmware polling writes proceed.
-//   - IIR (offset 2) reports "no interrupt pending" to avoid undefined state.
-//   - LCR/divisor registers are stored so DLAB/baud writes do not trap.
+// A 16550-compatible UART for console I/O, mapped at 0x10000000 (the QEMU virt
+// UART0 address used by OpenSBI's uart8250 early console and Linux's
+// of_serial driver).
+//
+// Registers (byte-addressed, reg-io-width=1 / reg-shift=0):
+//   - THR/RBR (offset 0, DLAB=0): TX write / RX read byte.
+//   - IER (offset 1): interrupt-enable register (bit 0 = RX data available).
+//   - IIR/FCR (offset 2): FIFO control / interrupt identification.
+//   - LCR (offset 3): line control (DLAB bit).
+//   - MCR (offset 4), LSR (offset 5), MSR (offset 6), SCR (offset 7).
+//
+// TX: THR writes are emitted to the host stdout.  LSR reports the
+// transmit-holding-register empty (THRE) and transmitter-empty (TEMT) bits so
+// polling writes proceed.
+//
+// RX: bytes supplied by the host (via uart_receive()/uart_poll_input()) are
+// buffered in a small FIFO, surfaced through RBR/LSR.DR/IIR, and drive the
+// external interrupt line 10 on the PLIC (when IER.ERBI is set).
 #define UART_BASE 0x10000000u
 #define UART_NREGS 8u
 
-static inline uint32_t
-uart_read(uint32_t offset)
-{
-    switch (offset & 0x7u)
-    {
-    case 0: // RBR/THR, DLL (no buffered input -> 0)
-    case 1: // IER/DLH
-        return 0;
-    case 2: // IIR: no interrupt pending
-        return 0x01;
-    case 3: // LCR
-        return 0;
-    case 4: // MCR
-        return 0;
-    case 5: // LSR: THRE | TEMT
-        return 0x60;
-    case 6: // MSR
-        return 0;
-    default: // SCR
-        return 0;
-    }
-}
+// External PLIC interrupt line the UART RX path raises.
+#define UART_IRQ 10u
 
-static inline void
-uart_write(uint32_t offset, uint32_t val)
-{
-    // THR (offset 0) with DLAB clear: transmit a character.
-    if ((offset & 0x7u) == 0)
-    {
-        putc((int)(val & 0xFFu), stdout);
-        fflush(stdout);
-    }
-    // All other register writes (LER, FCR, MCR, LCR, divisor) are no-ops that
-    // just need to be accepted so firmware does not trap.
-}
+// Reset the UART controller (FIFO drained, status cleared, IRQ deasserted).
+void uart_init(void);
+
+// Register accessors (byte width, `offset` 0..7).  `uart_read` returns the
+// byte value on the 8-byte window; `uart_write` emits/consumes as needed.
+uint32_t uart_read(uint32_t offset);
+void uart_write(uint32_t offset, uint32_t val);
+
+// Push one host byte into the RX FIFO (from the emulator's input poller).
+void uart_receive(uint8_t c);
+
+// Async host-stdin integration (used on POSIX): register stdin for readiness
+// notification and drain any available input on each call.  No threads are
+// used -- the host kernel (epoll/poll) notifies readiness and we read what is
+// available, so there is a single execution context and no re-entrancy.
+void uart_input_setup(void);
+void uart_poll_input(void);
 
 #endif // CONFIG_ENABLE_UART_DEVICE
 

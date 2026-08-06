@@ -45,6 +45,8 @@
 
 /* Device Support */
 #cmakedefine CONFIG_ENABLE_UART_DEVICE
+#cmakedefine CONFIG_ENABLE_UART_INPUT
+#cmakedefine CONFIG_ENABLE_PLIC_DEVICE
 #cmakedefine CONFIG_ENABLE_FDT
 
 /* Performance (from host detection, not user-configurable) */
