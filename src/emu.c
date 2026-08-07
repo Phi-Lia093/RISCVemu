@@ -59,6 +59,16 @@ print_usage(const char *prog_name)
             "  -L, --load FILE@HEX   Load an extra binary into RAM at the\n"
             "                        given address (repeatable; e.g. the\n"
             "                        OpenSBI next-stage kernel).\n"
+            "  -C, --console         UART console mode: the guest console owns\n"
+            "                        the host terminal (stdin/stdout), logger\n"
+            "                        output is dumped to --log (default\n"
+            "                        riscvemu.log), and the built-in debugger\n"
+            "                        is disabled.  The host terminal switches\n"
+            "                        to raw mode: keystrokes are sent to the\n"
+            "                        guest immediately and are not echoed (the\n"
+            "                        guest controls the screen).  Press Ctrl-]\n"
+            "                        then x to quit console mode.\n"
+            "  -l, --log FILE        Write logger output to FILE (truncated).\n"
 #ifdef CONFIG_ENABLE_DEBUGGER
             "  -d, --debug         Enable single-step debug mode\n"
             "  -b, --breakpoint    Set breakpoint address (hex format, e.g., "
@@ -153,6 +163,9 @@ int
 main(int argc, char **argv)
 {
     int opt;
+    int console_mode = 0; /* UART console mode: guest owns the host terminal */
+    const char *log_file
+        = NULL; /* --log FILE (defaults to riscvemu.log in console mode) */
 #ifdef CONFIG_ENABLE_DEBUGGER
     int debug_mode = 0;
     uint32_t breakpoint = 0;
@@ -176,6 +189,8 @@ main(int argc, char **argv)
             { "debug", no_argument, 0, 'd' },
             { "breakpoint", required_argument, 0, 'b' },
 #endif
+            { "console", no_argument, 0, 'C' },
+            { "log", required_argument, 0, 'l' },
 #ifdef CONFIG_ENABLE_FDT
             { "fdt", optional_argument, 0, 'F' },
 #endif
@@ -183,9 +198,10 @@ main(int argc, char **argv)
             { 0, 0, 0, 0 } };
 
 #ifdef CONFIG_ENABLE_DEBUGGER
-    while ((opt = getopt_long(argc, argv, "Ldb:h", long_options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "LCdb:hl:", long_options, NULL))
+           != -1)
 #else
-    while ((opt = getopt_long(argc, argv, "Lh", long_options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "LChl:", long_options, NULL)) != -1)
 #endif
     {
         switch (opt)
@@ -198,6 +214,15 @@ main(int argc, char **argv)
                 return 1;
             }
             break;
+
+        case 'C':
+            console_mode = 1;
+            break;
+
+        case 'l':
+            log_file = optarg;
+            break;
+
 #ifdef CONFIG_ENABLE_DEBUGGER
         case 'd':
             debug_mode = 1;
@@ -255,16 +280,36 @@ main(int argc, char **argv)
         return 1;
     }
 
+    /* --console: the guest UART owns the host terminal, so logger output is
+     * dumped to a file (riscvemu.log unless --log FILE) and nothing else
+     * touches stdout.  Without --console, logs stay on stdout (and go to a
+     * file too when --log is given). */
+    const char *log_file_path = NULL;
+    int log_to_stdout = 1;
+    if (console_mode)
+    {
+        log_file_path = log_file != NULL ? log_file : "riscvemu.log";
+        log_to_stdout = 0;
+    }
+    else if (log_file != NULL)
+    {
+        log_file_path = log_file;
+    }
 #ifdef CONFIG_ENABLE_DEBUGGER
-    init_logger(debug_mode ? DEBUG : INFO, NULL);
+    init_logger(console_mode ? INFO : (debug_mode ? DEBUG : INFO),
+                log_file_path, log_to_stdout);
 #else
-    init_logger(INFO, NULL);
+    init_logger(INFO, log_file_path, log_to_stdout);
 #endif
     info("RISC-V Emulator starting...");
     info("Program: %s", program_name);
     info("Base address: 0x%x", program_base);
 #ifdef CONFIG_ENABLE_DEBUGGER
-    if (breakpoint_set) info("Breakpoint: 0x%x", breakpoint);
+    if (console_mode && (debug_mode || breakpoint_set))
+    {
+        info("--console: built-in debugger disabled (-d/-b ignored)");
+    }
+    if (breakpoint_set && !console_mode) info("Breakpoint: 0x%x", breakpoint);
 #endif
 
     init_mem();
@@ -360,7 +405,9 @@ main(int argc, char **argv)
     extra_slots = NULL;
 
 #ifdef CONFIG_ENABLE_DEBUGGER
-    init_debugger();
+    /* --console bypasses the built-in debugger: no SIGINT interception and no
+     * stdin reads, so the guest UART exclusively owns the host terminal. */
+    if (!console_mode) init_debugger();
 #endif
 
     // we cannot fill 0 here because we will fuck up the mmu flags addr and main
@@ -374,9 +421,9 @@ main(int argc, char **argv)
 #endif
 
 #ifdef CONFIG_ENABLE_DEBUGGER
-    g_state.single_step = debug_mode;
+    g_state.single_step = !console_mode && debug_mode;
 
-    if (breakpoint_set)
+    if (breakpoint_set && !console_mode)
     {
         g_state.breakpoint = breakpoint;
         g_state.breakpoint_enabled = 1;
@@ -391,8 +438,15 @@ main(int argc, char **argv)
     info("starting execution at PC=0x%x", g_state.pc);
 
 #ifdef CONFIG_ENABLE_UART_DEVICE
-    /* Enable async host-stdin RX before the guest runs. */
-    uart_input_setup();
+    /* Enable async host-stdin RX before the guest runs.  With the built-in
+     * debugger compiled in, stdin is only claimed for the guest UART in
+     * --console mode: the debugger blocks on stdin (fgets) and a non-blocking
+     * fd would make its prompt spin. */
+    int uart_input_enabled = 1;
+#ifdef CONFIG_ENABLE_DEBUGGER
+    if (!console_mode) uart_input_enabled = 0;
+#endif
+    if (uart_input_enabled) uart_input_setup(console_mode);
 #endif
 
     // The riscv-tests harness reports the conclusion of a test that traps
@@ -425,7 +479,11 @@ main(int argc, char **argv)
     {
         check_and_handle_interrupts();
 #ifdef CONFIG_ENABLE_UART_DEVICE
-        uart_poll_input();
+        if (uart_poll_input()) /* Ctrl-] x quit escape / terminating signal */
+        {
+            uart_input_cleanup();
+            break;
+        }
 #endif
         if (g_state.pc >= MEM_SIZE)
         {
@@ -484,6 +542,9 @@ main(int argc, char **argv)
         last_fetch_pc = fetch_pc;
         g_state.pc += 4;
         clint_tick();
+#ifdef CONFIG_ENABLE_UART_DEVICE
+        uart_tick();
+#endif
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
         cycle++;
         if (unlikely(instret_suppress_next))
@@ -542,7 +603,11 @@ main(int argc, char **argv)
         check_and_handle_interrupts();
 #endif
 #ifdef CONFIG_ENABLE_UART_DEVICE
-        uart_poll_input();
+        if (uart_poll_input()) /* Ctrl-] x quit escape / terminating signal */
+        {
+            uart_input_cleanup();
+            break;
+        }
 #endif
         if (g_state.pc >= MEM_SIZE)
         {
@@ -579,6 +644,9 @@ main(int argc, char **argv)
         last_fetch_pc = fetch_pc;
         g_state.pc += 4;
         clint_tick();
+#ifdef CONFIG_ENABLE_UART_DEVICE
+        uart_tick();
+#endif
 #ifdef CONFIG_ENABLE_ZICNTR_EXTENSION
         cycle++;
         if (unlikely(instret_suppress_next))
@@ -626,6 +694,11 @@ main(int argc, char **argv)
             }
         }
     }
+#endif
+
+#ifdef CONFIG_ENABLE_UART_DEVICE
+    /* Restore the host terminal before returning (also covered by atexit). */
+    uart_input_cleanup();
 #endif
 
     info("Execution terminated. Return value: 0x%x (final x10 value) 0x%x "

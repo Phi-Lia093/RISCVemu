@@ -40,7 +40,8 @@
 //
 // TX: THR writes are emitted to the host stdout.  LSR reports the
 // transmit-holding-register empty (THRE) and transmitter-empty (TEMT) bits so
-// polling writes proceed.
+// polling writes proceed, and the transmitter-empty interrupt (IIR 0x02 /
+// IER.ETBEI) is implemented so interrupt-driven tty output drains correctly.
 //
 // RX: bytes supplied by the host (via uart_receive()/uart_poll_input()) are
 // buffered in a small FIFO, surfaced through RBR/LSR.DR/IIR, and drive the
@@ -54,6 +55,11 @@
 // Reset the UART controller (FIFO drained, status cleared, IRQ deasserted).
 void uart_init(void);
 
+// Advance the UART transmitter one emulated instruction (pacing the
+// transmitter-empty interrupt).  Called once per instruction from the run
+// loop, next to clint_tick().
+void uart_tick(void);
+
 // Register accessors (byte width, `offset` 0..7).  `uart_read` returns the
 // byte value on the 8-byte window; `uart_write` emits/consumes as needed.
 uint32_t uart_read(uint32_t offset);
@@ -66,8 +72,24 @@ void uart_receive(uint8_t c);
 // notification and drain any available input on each call.  No threads are
 // used -- the host kernel (epoll/poll) notifies readiness and we read what is
 // available, so there is a single execution context and no re-entrancy.
-void uart_input_setup(void);
-void uart_poll_input(void);
+//
+// `raw_mode` (pass 1 in --console mode) hands the host terminal to the guest:
+// if stdin is an interactive TTY it is switched to raw mode -- no canonical
+// line buffering (keystrokes reach the guest the moment they are typed instead
+// of being held until Enter) and no host echo (the guest alone controls the
+// screen).  Control characters are passed through to the guest, so to quit
+// console mode press Ctrl-] followed by x.  The original terminal settings
+// are restored by uart_input_cleanup(), which is also registered via atexit
+// and requested from a SIGINT/SIGTERM/SIGQUIT/SIGHUP handler.
+void uart_input_setup(int raw_mode);
+
+// Restore the host terminal (if uart_input_setup switched it to raw mode).
+void uart_input_cleanup(void);
+
+// Drain any available host input into the RX FIFO.  Returns non-zero when the
+// console quit escape (Ctrl-] then x) or a terminating signal was seen, in
+// which case the run loop should stop and call uart_input_cleanup().
+int uart_poll_input(void);
 
 #endif // CONFIG_ENABLE_UART_DEVICE
 

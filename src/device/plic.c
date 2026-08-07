@@ -20,21 +20,31 @@
 
 #include <device/plic.h>
 
-// Register map (all 32-bit, relative to PLIC_BASE).  One hart context (0), so
-// the enable window is at 0x02000 and the threshold/claim/complete at
-// 0x200000 / 0x200004.
-#define PLIC_PRIORITY_BASE 0x000000u + 0x4u
-#define PLIC_PRIORITY_END 0x000000u + 0x4u * PLIC_NDEV
+// Register map (all 32-bit, relative to PLIC_BASE).  Two hart contexts are
+// modelled: context 0 is the machine-mode context used by OpenSBI, context 1
+// is the supervisor-mode context used by Linux (the DT lists
+// interrupts-extended = <&cpu_intc 11> <&cpu_intc 9>, so the S entry maps to
+// context 1).  Registers:
+//   priority[i]         RW : 0x000000 + 4*i          (i = 1..PLIC_NDEV)
+//   pending             RO : 0x001000
+//   enable[ctx]         RW : 0x002000 + 0x80*ctx
+//   threshold[ctx]      RW : 0x200000 + 0x1000*ctx
+//   claim/complete[ctx] RW : 0x200004 + 0x1000*ctx
+#define PLIC_PRIORITY_END (0x4u * (PLIC_NDEV + 1u))
 #define PLIC_PENDING_BASE 0x001000u
 #define PLIC_ENABLE_BASE 0x002000u
-#define PLIC_THRESHOLD 0x200000u
-#define PLIC_CLAIM_COMPLETE 0x200004u
+#define PLIC_ENABLE_STRIDE 0x80u
+#define PLIC_CONTEXT_BASE 0x200000u
+#define PLIC_CONTEXT_STRIDE 0x1000u
+#define PLIC_CLAIM_OFF 0x4u
+
+#define PLIC_NCTX 2u /* context 0 = M-mode, context 1 = S-mode */
 
 static uint32_t priority[PLIC_NDEV + 1];
-static uint32_t pending; /* pending[id] bitmask (id 1..PLIC_NDEV) */
-static bool claimed[PLIC_NDEV + 1];
-static uint32_t enable; /* enable[id] bitmask for the single context */
-static uint32_t threshold;
+static uint32_t pending; /* live level-sensitive device interrupt lines */
+static uint32_t enable[PLIC_NCTX];
+static uint32_t threshold[PLIC_NCTX];
+static bool claimed[PLIC_NCTX][PLIC_NDEV + 1];
 
 void
 plic_init(void)
@@ -42,11 +52,37 @@ plic_init(void)
     for (unsigned i = 0; i <= PLIC_NDEV; i++)
     {
         priority[i] = 0;
-        claimed[i] = false;
+        for (unsigned c = 0; c < PLIC_NCTX; c++) claimed[c][i] = false;
     }
     pending = 0;
-    enable = 0;
-    threshold = 0;
+    for (unsigned c = 0; c < PLIC_NCTX; c++)
+    {
+        enable[c] = 0;
+        threshold[c] = 0;
+    }
+}
+
+static unsigned
+plic_best_source(unsigned ctx)
+{
+    // Highest enabled+priority pending source for one context (the PLIC
+    // forwards only the top one).  A source currently claimed by this context
+    // is masked out until it is completed.
+    unsigned best = 0;
+    unsigned best_pri = 0;
+    for (unsigned id = 1; id <= PLIC_NDEV; id++)
+    {
+        if (!(pending & (1u << id))) continue;
+        if (claimed[ctx][id]) continue;
+        if (!(enable[ctx] & (1u << id))) continue;
+        if (priority[id] <= threshold[ctx]) continue;
+        if (priority[id] >= best_pri)
+        {
+            best_pri = priority[id];
+            best = id;
+        }
+    }
+    return best;
 }
 
 uint32_t
@@ -54,23 +90,42 @@ plic_read32(uint32_t off)
 {
     if (off >= 0x4u && off < PLIC_PRIORITY_END)
     {
-        unsigned id = (off - 0x4u) / 4u;
+        // Interrupt source i has its priority register at offset 4*i (source 1
+        // at 0x4, ..., source 10 at 0x28), per the PLIC spec and what Linux's
+        // sifive-plic driver writes (PRIORITY_BASE + hwirq * 4).
+        unsigned id = off / 4u;
         if (id >= 1u && id <= PLIC_NDEV) return priority[id];
         return 0;
     }
     if (off >= PLIC_PENDING_BASE && off < PLIC_PENDING_BASE + 4) return pending;
-    if (off >= PLIC_ENABLE_BASE && off < PLIC_ENABLE_BASE + 4) return enable;
-    if (off == PLIC_THRESHOLD) return threshold;
-    if (off == PLIC_CLAIM_COMPLETE)
+    if (off >= PLIC_ENABLE_BASE
+        && off < PLIC_ENABLE_BASE + PLIC_ENABLE_STRIDE * PLIC_NCTX)
     {
-        // Claim: return the highest-priority pending enabled source and mark
-        // it claimed, which deasserts MEIP (id 0 means none, per the spec).
-        unsigned id = plic_external_pending();
-        if (id >= 1u && id <= PLIC_NDEV)
+        unsigned ctx = (off - PLIC_ENABLE_BASE) / PLIC_ENABLE_STRIDE;
+        unsigned word = ((off - PLIC_ENABLE_BASE) % PLIC_ENABLE_STRIDE) / 4u;
+        if (word == 0) return enable[ctx];
+        return 0;
+    }
+    if (off >= PLIC_CONTEXT_BASE
+        && off < PLIC_CONTEXT_BASE + PLIC_CONTEXT_STRIDE * PLIC_NCTX)
+    {
+        unsigned ctx = (off - PLIC_CONTEXT_BASE) / PLIC_CONTEXT_STRIDE;
+        unsigned sub = (off - PLIC_CONTEXT_BASE) % PLIC_CONTEXT_STRIDE;
+        if (sub == 0) return threshold[ctx];
+        if (sub == PLIC_CLAIM_OFF)
         {
-            pending &= ~(1u << id);
-            claimed[id] = true;
-            return id;
+            // Claim: return the highest-priority pending enabled source for
+            // this context and mark it in-progress.  The pending bit itself is
+            // the live device line (not cleared by claim), so a level that is
+            // still asserted re-arms the other context / this one after
+            // complete -- matching real hardware behaviour.
+            unsigned id = plic_best_source(ctx);
+            if (id >= 1u && id <= PLIC_NDEV)
+            {
+                claimed[ctx][id] = true;
+                return id;
+            }
+            return 0;
         }
         return 0;
     }
@@ -82,26 +137,36 @@ plic_write32(uint32_t off, uint32_t val)
 {
     if (off >= 0x4u && off < PLIC_PRIORITY_END)
     {
-        unsigned id = (off - 0x4u) / 4u;
+        unsigned id = off / 4u;
         if (id >= 1u && id <= PLIC_NDEV)
             priority[id] = val & 0x7u; /* 3-bit priority */
         return;
     }
-    if (off >= PLIC_ENABLE_BASE && off < PLIC_ENABLE_BASE + 4)
+    if (off >= PLIC_ENABLE_BASE
+        && off < PLIC_ENABLE_BASE + PLIC_ENABLE_STRIDE * PLIC_NCTX)
     {
-        enable = val;
+        unsigned ctx = (off - PLIC_ENABLE_BASE) / PLIC_ENABLE_STRIDE;
+        unsigned word = ((off - PLIC_ENABLE_BASE) % PLIC_ENABLE_STRIDE) / 4u;
+        if (word == 0) enable[ctx] = val;
         return;
     }
-    if (off == PLIC_THRESHOLD)
+    if (off >= PLIC_CONTEXT_BASE
+        && off < PLIC_CONTEXT_BASE + PLIC_CONTEXT_STRIDE * PLIC_NCTX)
     {
-        threshold = val & 0x7u;
-        return;
-    }
-    if (off == PLIC_CLAIM_COMPLETE)
-    {
-        // Complete: reinstate the claim-free state for the completed source.
-        unsigned id = val & 0x1Fu;
-        if (id >= 1u && id <= PLIC_NDEV) claimed[id] = false;
+        unsigned ctx = (off - PLIC_CONTEXT_BASE) / PLIC_CONTEXT_STRIDE;
+        unsigned sub = (off - PLIC_CONTEXT_BASE) % PLIC_CONTEXT_STRIDE;
+        if (sub == 0)
+        {
+            threshold[ctx] = val & 0x7u;
+            return;
+        }
+        if (sub == PLIC_CLAIM_OFF)
+        {
+            // Complete: reinstate the claim-free state for the completed
+            // source in this context.
+            unsigned id = val & 0x1Fu;
+            if (id >= 1u && id <= PLIC_NDEV) claimed[ctx][id] = false;
+        }
         return;
     }
     // Priority id 0, pending (read-only) and anything else: nothing to store.
@@ -111,36 +176,27 @@ void
 plic_set_irq(unsigned id, bool level)
 {
     if (id < 1u || id > PLIC_NDEV) return;
+    // pending is the live level-sensitive device line.  Claiming in a context
+    // records the in-progress source (masking it from that context via
+    // plic_best_source) but does not clear the line, matching real hardware.
     if (level)
-    {
-        // Do not re-raise an already-claimed source; the guest must complete
-        // it (via a write to claim/complete) before it can be re-asserted.
-        if (!claimed[id]) pending |= (1u << id);
-    }
+        pending |= (1u << id);
     else
-    {
         pending &= ~(1u << id);
-    }
 }
 
 unsigned
 plic_external_pending(void)
 {
-    // Highest enabled+priority pending source (PLIC forwards the top one).
-    unsigned best = 0;
-    unsigned best_pri = 0;
-    for (unsigned id = 1; id <= PLIC_NDEV; id++)
-    {
-        if (!(pending & (1u << id))) continue;
-        if (!(enable & (1u << id))) continue;
-        if (priority[id] <= threshold) continue;
-        if (priority[id] >= best_pri)
-        {
-            best_pri = priority[id];
-            best = id;
-        }
-    }
-    return best;
+    // Context 0 (M-mode) -- drives MIP.MEIP.
+    return plic_best_source(0);
+}
+
+unsigned
+plic_external_pending_s(void)
+{
+    // Context 1 (S-mode) -- drives MIP.SEIP.
+    return plic_best_source(1);
 }
 
 unsigned

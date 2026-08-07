@@ -81,18 +81,26 @@ make
 # 示例：在 0x1000 加载 run.bin（CLINT 自测程序）
 ./RISCVemu run.bin 0x1000
 
-# 启用调试器启动
+# 启动内置调试器（当前默认暂时禁用；以 -DCONFIG_ENABLE_DEBUGGER=ON 重新构建
+# 后 -d 才会可用）
 ./RISCVemu run.bin 0x1000 -d
 ```
 
 ### 运行 OpenSBI + 内核（操作系统引导）
 
-```bash
-# 引导 OpenSBI fw_jump，并将内核暂存到 0x80400000
-./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000
+在 `--console` 模式下，客户机 UART 独占宿主终端（stdin/stdout），所有模拟器
+日志消息都转储到日志文件，因此终端上只会显示客户机控制台输出，不会再与宿主
+日志行混杂。
 
-# 带调试器
-./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 -d
+宿主终端会切换为**原始模式（raw mode）**：每次按键都会立即送达客户机（无需
+等待回车、没有行缓冲），宿主不会回显任何内容，控制字符（如 Ctrl+C）也会直接
+透传给客户机——屏幕完全由客户机控制。按 **Ctrl-] 再按 x**（telnet 转义约定）
+可退出控制台模式并结束模拟器。退出时终端设置会自动恢复。
+
+```bash
+# 引导 OpenSBI fw_jump，并将内核暂存到 0x80400000（UART 控制台模式）
+./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 \
+    --console --log=riscvemu.log
 ```
 
 ### CMake 便捷目标
@@ -113,7 +121,14 @@ Usage: ./RISCVemu <program_file> <program_base> [options]
 Options:
   -L, --load FILE@HEX   将额外的二进制文件加载到 RAM 的指定地址
                         （可重复使用；例如 OpenSBI 的下一阶段内核）
-  -d, --debug           启用单步调试模式
+  -C, --console         UART 控制台模式：客户机控制台独占宿主终端
+                        （stdin/stdout），日志输出转储到 --log（默认
+                        riscvemu.log），并禁用内置调试器。宿主终端会切换
+                        为原始模式：按键立即送达客户机且不回显（屏幕由
+                        客户机控制）。按 Ctrl-] 再按 x 退出控制台模式
+  -l, --log FILE        将日志输出写入 FILE（打开时截断）
+  -d, --debug           启用单步调试模式（需要以 CONFIG_ENABLE_DEBUGGER=ON
+                        构建；当前暂时禁用）
   -b, --breakpoint      设置断点地址（十六进制格式）
   -F, --fdt[=addr]      构建设备树并通过 a1 传递给固件
                         （a0=hartid 0）；地址默认为 0x87f00000
@@ -121,7 +136,8 @@ Options:
 
 示例：
   ./RISCVemu test.bin 0x1000 -d -b 0x1200
-  ./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000
+  ./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 \
+      --console --log=riscvemu.log
 ```
 
 ## 🔧 调试器命令
@@ -214,7 +230,7 @@ RISCVemu/
 
 | 选项 | 默认值 | 描述 |
 |--------|---------|-------------|
-| `CONFIG_ENABLE_DEBUGGER` | ON | 内置调试器（`-d` 标志） |
+| `CONFIG_ENABLE_DEBUGGER` | OFF | 内置调试器（`-d` 标志）；当前暂时禁用 |
 | `CONFIG_SUPPORT_MISALIGN` | OFF | 支持非对齐内存访问（较慢） |
 | `CONFIG_ENABLE_M_EXTENSION` | ON | M：整数乘除法 |
 | `CONFIG_ENABLE_A_EXTENSION` | ON | A：原子操作 |

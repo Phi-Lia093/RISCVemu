@@ -27,6 +27,7 @@
 
 char level;
 FILE *file_output;
+static int log_to_stdout = 1; /* console mode sets this to 0 */
 
 static void
 generic_logger(char *level, char *fmt, va_list args)
@@ -42,10 +43,14 @@ generic_logger(char *level, char *fmt, va_list args)
     char *output_buffer = (char *)malloc(sizeof(char) * 2048);
     snprintf(output_buffer, 2048 * sizeof(char), "%s [%s] %s\n", time_buffer,
              level, buffer);
-    printf("%s", output_buffer);
+    if (log_to_stdout)
+    {
+        printf("%s", output_buffer);
+    }
     if (file_output != NULL)
     {
         fputs(output_buffer, file_output);
+        fflush(file_output);
     }
     free(time_buffer);
     free(buffer);
@@ -53,7 +58,7 @@ generic_logger(char *level, char *fmt, va_list args)
 }
 
 void
-init_logger(char default_level, char *output_file)
+init_logger(char default_level, const char *output_file, int log_to_stdout_p)
 {
     if (default_level == -1)
     {
@@ -63,9 +68,10 @@ init_logger(char default_level, char *output_file)
     {
         level = default_level;
     }
+    log_to_stdout = log_to_stdout_p;
     if (output_file != NULL)
     {
-        file_output = fopen(output_file, "wa");
+        file_output = fopen(output_file, "w");
     }
 }
 
@@ -81,7 +87,7 @@ terminate_logger(void)
 void
 set_level(char level_p)
 {
-    if (level >= DEBUG && level <= ERROR)
+    if (level_p >= DEBUG && level_p <= ERROR)
     {
         level = level_p;
     }
@@ -135,6 +141,18 @@ fatal(char *fmt, ...)
     va_start(args, fmt);
     generic_logger("!!!FATAL!!!", fmt, args);
     va_end(args);
+
+    // In console mode the terminal belongs to the guest UART (logs go to a
+    // file), so surface the abort on stderr to keep it visible to the user.
+    if (!log_to_stdout)
+    {
+        va_start(args, fmt);
+        fprintf(stderr, "!!!FATAL!!! ");
+        vfprintf(stderr, fmt, args);
+        fprintf(stderr, "\n");
+        va_end(args);
+    }
+
     terminate_logger();
     exit(-1);
 }

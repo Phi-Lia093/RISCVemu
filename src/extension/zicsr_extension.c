@@ -146,12 +146,21 @@ get_mip(void)
     }
 #ifdef CONFIG_ENABLE_PLIC_DEVICE
     // MIP.MEIP is a live view of the PLIC: pending while an enabled,
-    // non-thresholded external source is active.  Software clears it via the
-    // claim/complete handshake in the PLIC registers.
+    // non-thresholded external source is active in the M-mode context.
+    // Software clears it via the claim/complete handshake in the PLIC
+    // registers.
     if (plic_external_pending())
         mip |= MIP_MEIP;
     else
         mip &= ~MIP_MEIP;
+    // The PLIC's S-mode context (context 1, enable window 0x2080 /
+    // threshold+claim at 0x201000 / 0x201004) drives MIP.SEIP the same way.
+    // This is what delivers device interrupts (e.g. UART RX) to a supervisor
+    // Linux kernel through the delegated SEIP line.
+    if (plic_external_pending_s())
+        mip |= MIP_SEIP;
+    else
+        mip &= ~MIP_SEIP;
 #endif
     return mip;
 }

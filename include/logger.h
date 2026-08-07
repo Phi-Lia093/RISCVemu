@@ -36,7 +36,10 @@
 //                          pass NULL for no log files
 //                          default operation for exist file is truncate
 //                          create file if not exist
-void init_logger(char default_level, char *output_file);
+// log_to_stdout: mirror log messages to the host stdout (1), or keep the host
+//                          terminal exclusively for the guest UART console by
+//                          writing to the log file only (0)
+void init_logger(char default_level, const char *output_file, int log_to_stdout);
 
 // terminate logger
 // must be called before program exit or log file won't be closed

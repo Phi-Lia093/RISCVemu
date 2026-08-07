@@ -81,18 +81,31 @@ make
 # Example: Load run.bin at 0x1000 (CLINT self-test)
 ./RISCVemu run.bin 0x1000
 
-# Start with debugger enabled
+# Start with the built-in debugger (temporarily disabled by default; build
+# with -DCONFIG_ENABLE_DEBUGGER=ON to make -d available)
 ./RISCVemu run.bin 0x1000 -d
 ```
 
 ### Running OpenSBI + Kernel (OS Boot)
 
-```bash
-# Boot OpenSBI fw_jump with a kernel staged at 0x80400000
-./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000
+In `--console` mode the guest UART owns the host terminal (stdin/stdout) and
+all emulator log messages are dumped to a log file, so the terminal shows
+exactly what the guest console prints -- no interleaved host log lines.
 
-# With debugger
-./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 -d
+The host terminal is switched to **raw mode**: every keystroke is delivered to
+the guest immediately (no waiting for Enter, no canonical line buffering), the
+host does not echo anything, and control characters (e.g. Ctrl+C) are passed
+straight through to the guest -- the guest controls the screen entirely.  The
+16550 transmitter-empty interrupt (IER.ETBEI / IIR 0x02) is implemented, so the
+guest's interrupt-driven tty output drains correctly instead of stalling.  To
+leave console mode and quit the emulator, press **Ctrl-] then x** (the telnet
+escape convention).  The original terminal settings are restored automatically
+on exit.
+
+```bash
+# Boot OpenSBI fw_jump with a kernel staged at 0x80400000 (UART console mode)
+./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 \
+    --console --log=riscvemu.log
 ```
 
 ### CMake Convenience Targets
@@ -113,7 +126,16 @@ Usage: ./RISCVemu <program_file> <program_base> [options]
 Options:
   -L, --load FILE@HEX   Load an extra binary into RAM at the given address
                          (repeatable; e.g., OpenSBI next-stage kernel).
-  -d, --debug           Enable single-step debug mode
+  -C, --console         UART console mode: the guest console owns the host
+                         terminal (stdin/stdout), logger output is dumped to
+                         --log (default riscvemu.log), and the built-in
+                         debugger is disabled.  The host terminal switches to
+                         raw mode: keystrokes reach the guest immediately and
+                         are not echoed (the guest controls the screen).
+                         Press Ctrl-] then x to quit console mode.
+  -l, --log FILE        Write logger output to FILE (truncated on open).
+  -d, --debug           Enable single-step debug mode (needs a build with
+                         CONFIG_ENABLE_DEBUGGER=ON; temporarily disabled)
   -b, --breakpoint      Set breakpoint address (hex format)
   -F, --fdt[=addr]      Build and hand a device tree to firmware in a1
                          (a0=hartid 0); addr defaults to 0x87f00000
@@ -121,7 +143,8 @@ Options:
 
 Examples:
   ./RISCVemu test.bin 0x1000 -d -b 0x1200
-  ./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000
+  ./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 \
+      --console --log=riscvemu.log
 ```
 
 ## 🔧 Debugger Commands
@@ -214,7 +237,7 @@ RISCVemu/
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `CONFIG_ENABLE_DEBUGGER` | ON | Built-in debugger (`-d` flag) |
+| `CONFIG_ENABLE_DEBUGGER` | OFF | Built-in debugger (`-d` flag); temporarily disabled |
 | `CONFIG_SUPPORT_MISALIGN` | OFF | Support misaligned memory access (slower) |
 | `CONFIG_ENABLE_M_EXTENSION` | ON | M: Integer Multiplication/Division |
 | `CONFIG_ENABLE_A_EXTENSION` | ON | A: Atomic Operations |

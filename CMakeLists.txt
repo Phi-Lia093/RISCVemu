@@ -13,7 +13,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_SKIP_RPATH TRUE)
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
 
-option(CONFIG_ENABLE_DEBUGGER "Enable built-in debugger (-d flag)" ON)
+# NOTE: temporarily disabled -- the built-in debugger shares the host PTY
+# (stdin/stdout) with the guest UART console (see --console mode).  To
+# re-enable, set this option to ON.  No debugger source is removed.
+option(CONFIG_ENABLE_DEBUGGER "Enable built-in debugger (-d flag)" OFF)
 option(CONFIG_SUPPORT_MISALIGN "Support misaligned memory access (slower)" OFF)
 
 option(CONFIG_ENABLE_M_EXTENSION "M Extension: Integer Multiplication/Division" ON)
@@ -96,26 +99,34 @@ add_custom_target(compile_run
     VERBATIM
 )
 
-# Full OS-style boot: OpenSBI fw_jump at the firmware base, the fake
-# next-stage kernel staged via --load at OpenSBI's hand-off point, and a
-# device tree handed to OpenSBI in a1.  The --load/-L option is what stages
-# the second stage -- no address is hardcoded in the emulator.
+# Full OS-style boot in UART console mode: the guest console owns the host
+# terminal (stdin/stdout) and all emulator log output is dumped to
+# riscvemu.log instead of interleaving with the guest on the same PTY.
 add_custom_target(run
     COMMAND ${PROJECT_NAME} fw_jump.bin 0x80000000
-        --fdt --load kernel.bin@0x80400000
+        --fdt --load kernel.bin@0x80400000 --console --log=riscvemu.log
     WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
     DEPENDS ${PROJECT_NAME} compile_run
     VERBATIM
 )
 
-# Debug variant of the SBI + kernel boot (single-step enabled).
-add_custom_target(run_sbi_debug
-    COMMAND ${PROJECT_NAME} fw_jump.bin 0x80000000
-        --fdt --load kernel.bin@0x80400000 -d
-    WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
-    DEPENDS ${PROJECT_NAME} compile_run
-    VERBATIM
-)
+# Debug variant of the SBI + kernel boot (single-step enabled).  Only valid
+# when the built-in debugger is compiled in (CONFIG_ENABLE_DEBUGGER=ON).
+if(CONFIG_ENABLE_DEBUGGER)
+    add_custom_target(run_sbi_debug
+        COMMAND ${PROJECT_NAME} fw_jump.bin 0x80000000
+            --fdt --load kernel.bin@0x80400000 -d
+        WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
+        DEPENDS ${PROJECT_NAME} compile_run
+        VERBATIM
+    )
+else()
+    add_custom_target(run_sbi_debug
+        COMMAND ${CMAKE_COMMAND} -E echo "built-in debugger is disabled;"
+            " set CONFIG_ENABLE_DEBUGGER=ON to re-enable"
+        VERBATIM
+    )
+endif()
 
 # Keep the bare-metal CLINT timer self-test runnable.
 add_custom_target(run_selftest
@@ -125,19 +136,29 @@ add_custom_target(run_selftest
     VERBATIM
 )
 
+# Same OS-style boot with a real kernel Image; UART console mode as above.
 add_custom_target(run_kernel
     COMMAND ${PROJECT_NAME} fw_jump.bin 0x80000000 --fdt --load Image@0x80400000
+        --console --log=riscvemu.log
     WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
     DEPENDS ${PROJECT_NAME} compile_run
     VERBATIM
 )
 
-add_custom_target(debug
-    COMMAND ${PROJECT_NAME} run.bin 0x1000 -d
-    WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
-    DEPENDS ${PROJECT_NAME} compile_run
-    VERBATIM
-)
+if(CONFIG_ENABLE_DEBUGGER)
+    add_custom_target(debug
+        COMMAND ${PROJECT_NAME} run.bin 0x1000 -d
+        WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
+        DEPENDS ${PROJECT_NAME} compile_run
+        VERBATIM
+    )
+else()
+    add_custom_target(debug
+        COMMAND ${CMAKE_COMMAND} -E echo "built-in debugger is disabled;"
+            " set CONFIG_ENABLE_DEBUGGER=ON to re-enable"
+        VERBATIM
+    )
+endif()
 
 add_custom_target(tidy
     COMMAND find ./src -name "*.c" -o -name "*.h" | parallel -j 8 clang-format -i {}
