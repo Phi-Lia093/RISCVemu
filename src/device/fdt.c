@@ -622,7 +622,7 @@ fdt_build_riscvemu(uint32_t addr)
      */
     h = fdt_prop_str(h, "mmu-type", "riscv,sv32");
     if (!h) return 0;
-    h = fdt_prop_str(h, "riscv,isa", "rv32i2p1_m2p0_a2p1_f2p2_c2p0_zicsr2p0");
+    h = fdt_prop_str(h, "riscv,isa", "rv32imafdqc_zicsr_zifencei_zicond");
     if (!h) return 0;
     /* Modern DT interface (Linux 6.18+ requires these for CPU discovery;
      * CONFIG_RISCV_ISA_FALLBACK is typically off, so the old `riscv,isa`
@@ -631,7 +631,7 @@ fdt_build_riscvemu(uint32_t addr)
     if (!h) return 0;
     {
         /* riscv,isa-extensions is a DT string-list: NUL-terminated strings. */
-        static const char ext[] = "i\0m\0a\0f\0c\0zicsr\0zifencei\0zicntr\0";
+        static const char ext[] = "i\0m\0a\0f\0d\0q\0c\0zicsr\0zifencei\0zicntr\0zicond\0";
         h = fdt_prop_bytes(h, "riscv,isa-extensions", ext, sizeof(ext));
         if (!h) return 0;
     }

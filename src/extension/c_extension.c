@@ -30,6 +30,9 @@
 #ifdef CONFIG_ENABLE_ZICSR_EXTENSION
 #include <extension/system.h>
 #endif
+#ifdef CONFIG_ENABLE_F_EXTENSION
+#include <extension/f_extension.h>
+#endif
 
 /* ---------------------------------------------------------------------------
  * RVC immediate field helpers.
@@ -194,18 +197,76 @@ exec_c_insn(uint16_t c)
             g_state.pc -= 2;
             return 0;
         }
-        case 1: // c.fld (rv32 F/D) — not required by rv32uc
-        case 3: // c.ld / c.flw — not required by rv32uc
+        case 1: // c.fld (Q0, RV32 D : 64-bit FP load)
+#ifdef CONFIG_ENABLE_F_EXTENSION
+        {
+            uint32_t saved = g_state.pc;
+            insf_fld((int32_t)c_ls_uimm(c), rs1p, rdp);
+            if (g_state.pc == saved)
+                g_state.pc -= 2;
+            return g_state.pc == saved ? 0 : 1;
+        }
+#else
             raise_illegal(c);
             return 1;
+#endif
+        case 3: // c.flw (Q0, 32-bit FP load)
+#ifdef CONFIG_ENABLE_F_EXTENSION
+        {
+            uint32_t saved = g_state.pc;
+            insf_flw((int32_t)c_ls_uimm(c), rs1p, rdp);
+            if (g_state.pc == saved)
+                g_state.pc -= 2;
+            return g_state.pc == saved ? 0 : 1;
+        }
+#else
+            raise_illegal(c);
+            return 1;
+#endif
         case 2: // c.lw
+        {
+            uint32_t saved = g_state.pc;
             insi_i_lw((int32_t)c_ls_uimm(c), rs1p, rdp);
-            g_state.pc -= 2;
-            return 0;
+            /* If the load raised a trap (e.g. page fault) it already
+             * repositioned PC; do not apply the sequential -2 advance. */
+            if (g_state.pc == saved)
+                g_state.pc -= 2;
+            return g_state.pc == saved ? 0 : 1;
+        }
         case 6: // c.sw
+        {
+            uint32_t saved = g_state.pc;
             insi_s_sw((int32_t)c_ls_uimm(c), rs2p, rs1p);
-            g_state.pc -= 2;
-            return 0;
+            if (g_state.pc == saved)
+                g_state.pc -= 2;
+            return g_state.pc == saved ? 0 : 1;
+        }
+        case 5: // c.fsd (Q0, RV32 D : 64-bit FP store)
+#ifdef CONFIG_ENABLE_F_EXTENSION
+        {
+            uint32_t saved = g_state.pc;
+            insf_fsd((int32_t)c_ls_uimm(c), rs1p, rs2p);
+            if (g_state.pc == saved)
+                g_state.pc -= 2;
+            return g_state.pc == saved ? 0 : 1;
+        }
+#else
+            raise_illegal(c);
+            return 1;
+#endif
+        case 7: // c.fsw (Q0, 32-bit FP store)
+#ifdef CONFIG_ENABLE_F_EXTENSION
+        {
+            uint32_t saved = g_state.pc;
+            insf_fsw((int32_t)c_ls_uimm(c), rs1p, rs2p);
+            if (g_state.pc == saved)
+                g_state.pc -= 2;
+            return g_state.pc == saved ? 0 : 1;
+        }
+#else
+            raise_illegal(c);
+            return 1;
+#endif
         default:
             break;
         }
@@ -338,9 +399,13 @@ exec_c_insn(uint16_t c)
                 raise_illegal(c);
                 return 1;
             }
-            insi_i_lw((int32_t)c_lwsp_uimm(c), 2, rd);
-            g_state.pc -= 2;
-            return 0;
+            {
+                uint32_t saved = g_state.pc;
+                insi_i_lw((int32_t)c_lwsp_uimm(c), 2, rd);
+                if (g_state.pc == saved)
+                    g_state.pc -= 2;
+                return g_state.pc == saved ? 0 : 1;
+            }
         case 4: // c.jr / c.mv / c.ebreak / c.jalr / c.add
         {
             uint32_t rs1 = (c >> 7) & 0x1F;
@@ -397,9 +462,13 @@ exec_c_insn(uint16_t c)
             return 0;
         }
         case 6: // c.swsp
+        {
+            uint32_t saved = g_state.pc;
             insi_s_sw((int32_t)c_swsp_uimm(c), (c >> 2) & 0x1F, 2);
-            g_state.pc -= 2;
-            return 0;
+            if (g_state.pc == saved)
+                g_state.pc -= 2;
+            return g_state.pc == saved ? 0 : 1;
+        }
         default:
             break;
         }
