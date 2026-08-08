@@ -27,6 +27,21 @@
 #include <config.h>
 #include <emu.h>
 
+
+/* A store to any byte of a word reserved by LR.W clears the reservation
+ * (RISC-V spec, "reservation set").  mem_write* call this so a stale SC.W can
+ * never succeed after another access modified the reserved word. */
+static inline void
+mem_clear_reservation(uint32_t addr)
+{
+#ifdef CONFIG_ENABLE_A_EXTENSION
+    if (g_state.mmu_flags.size > 0)
+    {
+        hashmap_remove(&g_state.mmu_flags, addr & ~0x3u);
+    }
+#endif
+}
+
 #ifdef CONFIG_ENABLE_UART_DEVICE
 #include <device/uart.h>
 #endif
@@ -80,6 +95,7 @@ mem_read8_signed(uint32_t addr)
 static inline void
 mem_write8(uint32_t addr, uint8_t val)
 {
+    mem_clear_reservation(addr);
     if (addr >= CLINT_BASE && addr < CLINT_BASE + CLINT_SIZE)
     {
         clint_store(addr, val);
@@ -133,6 +149,7 @@ mem_read16_signed(uint32_t addr)
 static inline void
 mem_write16(uint32_t addr, uint16_t val)
 {
+    mem_clear_reservation(addr);
     if (addr >= CLINT_BASE && addr < CLINT_BASE + CLINT_SIZE)
     {
         for (int i = 0; i < 2; i++)
@@ -184,6 +201,7 @@ mem_read32_signed(uint32_t addr)
 static inline void
 mem_write32(uint32_t addr, uint32_t val)
 {
+    mem_clear_reservation(addr);
     if (addr >= CLINT_BASE && addr < CLINT_BASE + CLINT_SIZE)
     {
         for (int i = 0; i < 4; i++)
@@ -226,6 +244,7 @@ mem_read64_unsigned(uint32_t addr)
 static inline void
 mem_write64(uint32_t addr, uint64_t val)
 {
+    mem_clear_reservation(addr);
     if (addr >= CLINT_BASE && addr < CLINT_BASE + CLINT_SIZE)
     {
         for (int i = 0; i < 8; i++)
@@ -242,56 +261,4 @@ is_aligned(uint32_t addr, uint32_t size)
     return (addr & (size - 1)) == 0;
 }
 
-#ifdef CONFIG_SUPPORT_MISALIGN
-
-static inline uint32_t
-misaligned_load32(uint32_t addr)
-{
-    uint32_t val = 0;
-    for (int i = 0; i < 4; i++)
-    {
-        val |= (uint32_t)mem_read8_unsigned(addr + i) << (i * 8);
-    }
-    return val;
-}
-
-static inline int32_t
-misaligned_load32_signed(uint32_t addr)
-{
-    return (int32_t)misaligned_load32(addr);
-}
-
-static inline uint16_t
-misaligned_load16(uint32_t addr)
-{
-    uint16_t val = 0;
-    val |= (uint16_t)mem_read8_unsigned(addr);
-    val |= (uint16_t)mem_read8_unsigned(addr + 1) << 8;
-    return val;
-}
-
-static inline int16_t
-misaligned_load16_signed(uint32_t addr)
-{
-    return (int16_t)misaligned_load16(addr);
-}
-
-static inline void
-misaligned_store32(uint32_t addr, uint32_t val)
-{
-    for (int i = 0; i < 4; i++)
-    {
-        mem_write8(addr + i, (val >> (i * 8)) & 0xFF);
-    }
-}
-
-static inline void
-misaligned_store16(uint32_t addr, uint16_t val)
-{
-    mem_write8(addr, val & 0xFF);
-    mem_write8(addr + 1, (val >> 8) & 0xFF);
-}
-
-#endif
-
-#endif
+#endif // CONFIG_ENABLE_UART_DEVICE

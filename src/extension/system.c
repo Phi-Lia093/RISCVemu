@@ -203,6 +203,17 @@ raise_exception_pc(uint32_t cause, uint32_t tval, uint32_t epc)
     uint32_t current_privilege = g_state.privilege;
     uint32_t pc = g_state.pc;
 
+    // A trap clears any outstanding LR.W reservation (the RISC-V spec allows
+    // implementations to clear the reservation on any event; failing to do so
+    // would let a stale SC.W succeed after an interrupt modified the reserved
+    // word, breaking the guest's seqlock/atomic protocols).
+#ifdef CONFIG_ENABLE_A_EXTENSION
+    if (g_state.mmu_flags.size > 0)
+    {
+        hashmap_clear(&g_state.mmu_flags);
+    }
+#endif
+
     // A guest exception is ordinary running behaviour - e.g. OpenSBI probing
     // optional CSRs via csr_read_allowed, or an OS deliberately trapping to its
     // own handler.  Log at debug level so a normal boot stays clean; use -d to
@@ -404,6 +415,15 @@ raise_interrupt(uint32_t irq)
 {
     uint32_t current_privilege = g_state.privilege;
     uint32_t pc = g_state.pc;
+
+    // An interrupt clears any outstanding LR.W reservation (see
+    // raise_exception_pc for why this matters).
+#ifdef CONFIG_ENABLE_A_EXTENSION
+    if (g_state.mmu_flags.size > 0)
+    {
+        hashmap_clear(&g_state.mmu_flags);
+    }
+#endif
 
     debug("Interrupt: irq=%d, pc=0x%08X, priv=%d", irq, pc, current_privilege);
 

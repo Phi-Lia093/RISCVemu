@@ -313,6 +313,77 @@ mmu_write64(uint32_t vaddr, uint64_t val)
     mem_write64(pa, val);
 }
 
+/* Misaligned accesses must translate through the MMU on every byte; the
+ * physical-only helpers in mem.h take a *physical* address and would silently
+ * read/write the wrong location if given a guest virtual address. */
+static inline uint16_t
+mmu_misaligned_load16(uint32_t vaddr)
+{
+    uint16_t val = 0;
+    val |= (uint16_t)mmu_read8_unsigned(vaddr);
+    val |= (uint16_t)mmu_read8_unsigned(vaddr + 1) << 8;
+    return val;
+}
+
+static inline int16_t
+mmu_misaligned_load16_signed(uint32_t vaddr)
+{
+    return (int16_t)mmu_misaligned_load16(vaddr);
+}
+
+static inline uint32_t
+mmu_misaligned_load32(uint32_t vaddr)
+{
+    uint32_t val = 0;
+    for (int i = 0; i < 4; i++)
+    {
+        val |= (uint32_t)mmu_read8_unsigned(vaddr + i) << (i * 8);
+    }
+    return val;
+}
+
+static inline int32_t
+mmu_misaligned_load32_signed(uint32_t vaddr)
+{
+    return (int32_t)mmu_misaligned_load32(vaddr);
+}
+
+static inline uint64_t
+mmu_misaligned_load64(uint32_t vaddr)
+{
+    uint64_t val = 0;
+    for (int i = 0; i < 8; i++)
+    {
+        val |= (uint64_t)mmu_read8_unsigned(vaddr + i) << (8 * i);
+    }
+    return val;
+}
+
+static inline void
+mmu_misaligned_store16(uint32_t vaddr, uint16_t val)
+{
+    mmu_write8(vaddr, (uint8_t)(val & 0xFF));
+    mmu_write8(vaddr + 1, (uint8_t)((val >> 8) & 0xFF));
+}
+
+static inline void
+mmu_misaligned_store32(uint32_t vaddr, uint32_t val)
+{
+    mmu_write8(vaddr, (uint8_t)(val & 0xFF));
+    mmu_write8(vaddr + 1, (uint8_t)((val >> 8) & 0xFF));
+    mmu_write8(vaddr + 2, (uint8_t)((val >> 16) & 0xFF));
+    mmu_write8(vaddr + 3, (uint8_t)((val >> 24) & 0xFF));
+}
+
+static inline void
+mmu_misaligned_store64(uint32_t vaddr, uint64_t val)
+{
+    for (int i = 0; i < 8; i++)
+    {
+        mmu_write8(vaddr + i, (uint8_t)((val >> (8 * i)) & 0xFF));
+    }
+}
+
 #endif // CONFIG_ENABLE_ZICSR_EXTENSION
 
 #endif // MMU_H

@@ -1233,14 +1233,9 @@ load64(uint32_t addr)
 {
     if (unlikely(!is_aligned(addr, 8)))
     {
-        uint64_t v = 0;
-        for (int i = 0; i < 8; i++)
-        {
-            v |= (uint64_t)mem_read8_unsigned(addr + i) << (8 * i);
-        }
-        return v;
+        return mmu_misaligned_load64(addr);
     }
-    return mem_read64_unsigned(addr);
+    return mmu_read64_unsigned(addr);
 }
 
 static void
@@ -1248,13 +1243,10 @@ store64(uint32_t addr, uint64_t val)
 {
     if (unlikely(!is_aligned(addr, 8)))
     {
-        for (int i = 0; i < 8; i++)
-        {
-            mem_write8(addr + i, (val >> (8 * i)) & 0xFF);
-        }
+        mmu_misaligned_store64(addr, val);
         return;
     }
-    mem_write64(addr, val);
+    mmu_write64(addr, val);
 }
 #endif
 
@@ -1265,7 +1257,7 @@ insf_flw(uint32_t imm, uint32_t rs1, uint32_t rd)
     uint32_t val;
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(!is_aligned(addr, 4)))
-        val = misaligned_load32(addr);
+        val = mmu_misaligned_load32(addr);
     else
 #endif
         val = mmu_read32_unsigned(addr);
@@ -1279,7 +1271,7 @@ insf_fsw(uint32_t imm, uint32_t rs1, uint32_t rs2)
     uint32_t val = fpr_read_s(rs2);
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(!is_aligned(addr, 4)))
-        misaligned_store32(addr, val);
+        mmu_misaligned_store32(addr, val);
     else
 #endif
         mmu_write32(addr, val);
@@ -1317,7 +1309,7 @@ insf_flh(uint32_t imm, uint32_t rs1, uint32_t rd)
     uint16_t val;
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(!is_aligned(addr, 2)))
-        val = misaligned_load16(addr);
+        val = mmu_misaligned_load16(addr);
     else
 #endif
         val = mmu_read16_unsigned(addr);
@@ -1331,7 +1323,7 @@ insf_fsh(uint32_t imm, uint32_t rs1, uint32_t rs2)
     uint16_t val = fpr_read_h(rs2);
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(!is_aligned(addr, 2)))
-        misaligned_store16(addr, val);
+        mmu_misaligned_store16(addr, val);
     else
 #endif
         mmu_write16(addr, val);

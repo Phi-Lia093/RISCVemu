@@ -205,7 +205,7 @@ insi_i_lh(uint32_t imm, uint32_t rs1, uint32_t rd)
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(addr & 0x1))
     {
-        int16_t val = misaligned_load16_signed(addr);
+        int16_t val = mmu_misaligned_load16_signed(addr);
         reg_write(rd, (uint32_t)val);
         return;
     }
@@ -230,7 +230,7 @@ insi_i_lw(uint32_t imm, uint32_t rs1, uint32_t rd)
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(addr & 0x3))
     {
-        int32_t val = misaligned_load32_signed(addr);
+        int32_t val = mmu_misaligned_load32_signed(addr);
         reg_write(rd, (uint32_t)val);
         return;
     }
@@ -266,7 +266,7 @@ insi_i_lhu(uint32_t imm, uint32_t rs1, uint32_t rd)
 #ifdef CONFIG_SUPPORT_MISALIGN
     if (unlikely(addr & 0x1))
     {
-        uint16_t val = misaligned_load16(addr);
+        uint16_t val = mmu_misaligned_load16(addr);
         reg_write(rd, (uint32_t)val);
         return;
     }
@@ -322,7 +322,7 @@ insi_s_sh(uint32_t imm, uint32_t rs2, uint32_t rs1)
     if (unlikely(addr & 0x1))
     {
         uint32_t val = reg_read(rs2);
-        misaligned_store16(addr, (uint16_t)(val & 0xFFFF));
+        mmu_misaligned_store16(addr, (uint16_t)(val & 0xFFFF));
         return;
     }
 #else
@@ -347,7 +347,7 @@ insi_s_sw(uint32_t imm, uint32_t rs2, uint32_t rs1)
     if (unlikely(addr & 0x3))
     {
         uint32_t val = reg_read(rs2);
-        misaligned_store32(addr, val);
+        mmu_misaligned_store32(addr, val);
         return;
     }
 #else
