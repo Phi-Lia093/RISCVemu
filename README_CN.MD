@@ -1,18 +1,14 @@
-<!--
-SPDX-FileCopyrightText: 2026 2026 PhiLia093 phi_lia093@126.com
-
-SPDX-License-Identifier: GPL-3.0-or-later
--->
-
 # RISCVemu
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![C23](https://img.shields.io/badge/C-23-blue.svg)](https://en.cppreference.com/w/c/23)
 [![CMake](https://img.shields.io/badge/CMake-3.10+-green.svg)](https://cmake.org/)
-[![RISC-V](https://img.shields.io/badge/RISC--V-IMA(FDQ)C%20%26%20more-red.svg)](https://riscv.org/)
-[![Version](https://img.shields.io/badge/version-0.4-blue.svg)]()
+[![RISC-V](https://img.shields.io/badge/RISC--V-IMA(FDQ)C%20&%20more-red.svg)](https://riscv.org/)
+[![Linux](https://img.shields.io/badge/Linux-6.x-blue.svg)](https://kernel.org/)
+[![OpenSBI](https://img.shields.io/badge/OpenSBI-v1.9-green.svg)](https://github.com/riscv-software-src/opensbi)
+[![Version](https://img.shields.io/badge/version-1.0-blue.svg)]()
 
-一个使用 C23 编写的教学用 RISC-V 指令集模拟器。支持基础整数指令集 (I)、乘除扩展 (M)、原子操作扩展 (A)、压缩指令扩展 (C)、单/双/四/半精度浮点扩展 (F/D/Q/Zfh) 以及不断增加的更多标准扩展。专为学习和探索 RISC-V 架构而设计，现已支持 OpenSBI/操作系统引导和完整的设备树。
+一个使用 C23 编写的教学用 RISC-V 指令集模拟器。支持基础整数指令集 (I)、乘除扩展 (M)、原子操作扩展 (A)、压缩指令扩展 (C)、单/双/四/半精度浮点扩展 (F/D/Q/Zfh) 以及不断增加的更多标准扩展。专为学习和探索 RISC-V 架构而设计，现已支持 **Linux 内核引导**（通过 OpenSBI + 设备树）。
 
 [中文文档](./README_CN.MD) | [English](./README.MD)
 
@@ -33,11 +29,20 @@ SPDX-License-Identifier: GPL-3.0-or-later
 - **机器/监管/用户模式**：完整的特权级支持
 - **SV32 页表**：带 MMU 的虚拟内存
 - **CLINT 定时器**：带有 mtime/mtimecmp 的核心本地中断器
+- **PLIC 中断控制器**：平台级中断控制器 (0x0C000000)
 - **UART 模拟**：在 `0x10000000` 处兼容 16550
 - **设备树 (FDT)**：为 OpenSBI/操作系统引导自动生成扁平设备树
 - **OpenSBI 集成**：在 `0x80000000` 引导 `fw_jump.bin`，并支持下一阶段内核加载
 - **多阶段二进制加载**：`--load FILE@HEX` 用于加载额外的二进制文件（如内核、initrd）
 - **独立 Initrd 支持**：`--initrd FILE[@HEX]` 将 cpio 归档加载到 RAM，并通过 FDT 的 `/chosen/linux,initrd-*` 传递给 Linux，无需将 initramfs 打包进内核 Image
+
+### Linux 支持 🐧
+- **完整引导流程**：通过 OpenSBI + FDT 引导 Linux 6.x 内核
+- **UART 控制台**：独占宿主终端（原始模式），按键即时响应，Ctrl-] x 退出
+- **Initrd 支持**：独立 cpio 归档加载，无需重新编译内核
+- **SBI 扩展**：支持 TIME、IPI、RFENCE、DBCN、FWFT 等标准 SBI 扩展
+- **PLIC 中断**：UART 通过 PLIC 提供中断，`/dev/ttyS0` 正常工作
+- **已测试内核版本**：Linux 6.18.43 (rv32)
 
 ### 运行时与调试
 - **4GB 内存空间**：采用写时复制策略的虚拟页帧分配
@@ -82,26 +87,24 @@ make
 # 示例：在 0x1000 加载 run.bin（CLINT 自测程序）
 ./RISCVemu run.bin 0x1000
 
-# 启动内置调试器（当前默认暂时禁用；以 -DCONFIG_ENABLE_DEBUGGER=ON 重新构建
-# 后 -d 才会可用）
+# 启动内置调试器（以 -DCONFIG_ENABLE_DEBUGGER=ON 重新构建后 -d 才会可用）
 ./RISCVemu run.bin 0x1000 -d
 ```
 
-### 运行 OpenSBI + 内核（操作系统引导）
+### 引导 Linux 内核
 
-在 `--console` 模式下，客户机 UART 独占宿主终端（stdin/stdout），所有模拟器
-日志消息都转储到日志文件，因此终端上只会显示客户机控制台输出，不会再与宿主
-日志行混杂。
+在 `--console` 模式下，客户机 UART 独占宿主终端（stdin/stdout），所有模拟器日志消息都转储到日志文件，因此终端上只会显示客户机控制台输出，不再与宿主日志行混杂。
 
-宿主终端会切换为**原始模式（raw mode）**：每次按键都会立即送达客户机（无需
-等待回车、没有行缓冲），宿主不会回显任何内容，控制字符（如 Ctrl+C）也会直接
-透传给客户机——屏幕完全由客户机控制。按 **Ctrl-] 再按 x**（telnet 转义约定）
-可退出控制台模式并结束模拟器。退出时终端设置会自动恢复。
+宿主终端会切换为**原始模式（raw mode）**：每次按键都会立即送达客户机（无需等待回车、没有行缓冲），宿主不会回显任何内容，控制字符（如 Ctrl+C）也会直接透传给客户机——屏幕完全由客户机控制。按 **Ctrl-] 再按 x**（telnet 转义约定）可退出控制台模式并结束模拟器。退出时终端设置会自动恢复。
 
 ```bash
 # 引导 OpenSBI fw_jump，并将内核暂存到 0x80400000（UART 控制台模式）
 ./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 \
     --console --log=riscvemu.log
+
+# 带独立 initrd 的完整引导
+./RISCVemu fw_jump.bin 0x80000000 --fdt --load Image@0x80400000 \
+    --initrd initrd.cpio.gz --console --log=riscvemu.log
 ```
 
 ### CMake 便捷目标
@@ -109,6 +112,7 @@ make
 ```bash
 make run            # 运行 OpenSBI + 内核引导演示
 make run_sbi_debug  # 同上，启用调试器
+make run_kernel     # 使用真实 Linux 内核 Image + initrd 引导
 make run_selftest   # 运行 CLINT 定时器自测
 make debug          # 在调试模式下运行自测
 make build_tests    # 构建 riscv-tests
@@ -144,6 +148,8 @@ Options:
   ./RISCVemu test.bin 0x1000 -d -b 0x1200
   ./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 \
       --console --log=riscvemu.log
+  ./RISCVemu fw_jump.bin 0x80000000 --fdt --load Image@0x80400000 \
+      --initrd initrd.cpio.gz --console
 ```
 
 ## 🔧 调试器命令
@@ -188,6 +194,7 @@ RISCVemu/
 │   ├── device/             # 设备模拟
 │   │   ├── clint.h         # CLINT 定时器
 │   │   ├── fdt.h           # 扁平设备树生成器
+│   │   ├── plic.h          # PLIC 中断控制器
 │   │   └── uart.h          # 16550 UART
 │   └── extension/          # 扩展指令头文件
 │       ├── a_extension.h
@@ -210,7 +217,8 @@ RISCVemu/
 │   ├── mem.c
 │   ├── device/
 │   │   ├── clint.c
-│   │   └── fdt.c
+│   │   ├── fdt.c
+│   │   └── plic.c          # PLIC 实现
 │   └── extension/
 │       ├── c_extension.c
 │       ├── f_extension.c
@@ -250,6 +258,7 @@ RISCVemu/
 | `CONFIG_ENABLE_ZIFENCEI_EXTENSION` | ON | Zifencei：FENCE.I |
 | `CONFIG_ENABLE_ZICOND_EXTENSION` | ON | Zicond：条件操作指令 |
 | `CONFIG_ENABLE_UART_DEVICE` | ON | 0x10000000 处的 16550 UART |
+| `CONFIG_ENABLE_PLIC_DEVICE` | ON | 0x0C000000 处的 PLIC 中断控制器 |
 | `CONFIG_ENABLE_FDT` | ON | 设备树 Blob 生成器 |
 | `OPTIMIZE_FOR_SIZE` | OFF | 针对二进制大小优化（`-Os`） |
 | `ENABLE_LTO` | OFF | 链接时优化 |
@@ -278,17 +287,33 @@ make
 | `rv32mi-p-*` | 机器模式 | ✅ 全部通过 |
 | `rv32si-p-*` | 监管模式 | ✅ 全部通过 |
 
-预期测试输出：
+### Linux 引导状态
+
+| 组件 | 状态 |
+|-------|--------|
+| OpenSBI 引导 | ✅ 正常 (v1.9-16) |
+| Linux 6.18.43 内核 | ✅ 正常引导 |
+| UART 控制台 | ✅ 正常工作 |
+| Initrd 加载 | ✅ 正常 (cpio) |
+| PLIC 中断 | ✅ 正常 |
+| SBI 扩展 (TIME/IPI/RFENCE/DBCN/FWFT) | ✅ 支持 |
+
+预期输出（Linux 引导日志）：
 ```
-[rv32ui-p-add] ✅ PASS
-[rv32ui-p-addi] ✅ PASS
-[rv32uf-p-fadd] ✅ PASS
+OpenSBI v1.9-16-g337c23dd
 ...
+[    0.000000] Linux version 6.18.43 ...
+[    0.000000] Machine model: RISCVemu RV32 virt
+...
+BusyBox v1.38.0 built-in shell (ash)
+# ls
+bin   dev   etc   init  proc  root  sbin  sys   tmp   usr   var
 ```
 
 ## 🎯 已知限制
 
-- 仅支持扁平二进制格式（不支持直接加载 ELF；请使用 `objcopy -O binary`）（即将支持！）
+- 仅支持扁平二进制格式（不支持直接加载 ELF；请使用 `objcopy -O binary`）（ELF 支持即将到来！）
+- 仅支持 RV32（RV64 支持正在开发中）
 - 可移植性：可能无法在大端系统上工作（别碰那个神奇的解码器！我搞砸过好几次，又回滚了无数次）
 - 性能：启用所有扩展时非常慢（可能只有 130MIPS），而仅启用 "I" 时约为 270MIPS（也许以后会做 JIT？）
 

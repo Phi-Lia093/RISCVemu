@@ -9,10 +9,12 @@ SPDX-License-Identifier: GPL-3.0-or-later
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![C23](https://img.shields.io/badge/C-23-blue.svg)](https://en.cppreference.com/w/c/23)
 [![CMake](https://img.shields.io/badge/CMake-3.10+-green.svg)](https://cmake.org/)
-[![RISC-V](https://img.shields.io/badge/RISC--V-IMA(FDQ)C%20%26%20more-red.svg)](https://riscv.org/)
-[![Version](https://img.shields.io/badge/version-0.4-blue.svg)]()
+[![RISC-V](https://img.shields.io/badge/RISC--V-IMA(FDQ)C%20&%20more-red.svg)](https://riscv.org/)
+[![Linux](https://img.shields.io/badge/Linux-6.x-blue.svg)](https://kernel.org/)
+[![OpenSBI](https://img.shields.io/badge/OpenSBI-v1.9-green.svg)](https://github.com/riscv-software-src/opensbi)
+[![Version](https://img.shields.io/badge/version-1.0-blue.svg)]()
 
-A pedagogical RISC-V instruction set simulator written in C23. Supports base integer (I), multiply/divide (M), atomic (A), compressed (C), single/double/quad/half-precision floating-point (F/D/Q/Zfh), and a growing set of standard extensions. Built for learning and exploring RISC-V architecture, now with OpenSBI/OS boot support and a complete device tree.
+A pedagogical RISC-V instruction set simulator written in C23. Supports base integer (I), multiply/divide (M), atomic (A), compressed (C), single/double/quad/half-precision floating-point (F/D/Q/Zfh), and a growing set of standard extensions. Built for learning and exploring RISC-V architecture, now with **Linux kernel boot support** (via OpenSBI + Device Tree).
 
 [中文文档](./README_CN.MD) | [English](./README.MD)
 
@@ -33,11 +35,20 @@ A pedagogical RISC-V instruction set simulator written in C23. Supports base int
 - **Machine/Supervisor/User Privilege Modes**: Full privilege-level support
 - **SV32 Page Tables**: Virtual memory with MMU
 - **CLINT Timer**: Core Local Interruptor with mtime/mtimecmp
+- **PLIC Interrupt Controller**: Platform-Level Interrupt Controller at `0x0C000000`
 - **UART Emulation**: 16550-compatible at `0x10000000`
 - **Device Tree (FDT)**: Auto-generated Flattened Device Tree for OpenSBI/OS boot
 - **OpenSBI Integration**: Boot `fw_jump.bin` at `0x80000000` with next-stage kernel staging
 - **Multi-stage Binary Loading**: `--load FILE@HEX` for loading additional binaries (e.g., kernel, initrd)
 - **Separate Initrd Support**: `--initrd FILE[@HEX]` loads a cpio archive into RAM and hands it to Linux via the FDT's `/chosen/linux,initrd-*`, so the initramfs need not be baked into the kernel Image
+
+### Linux Support 🐧
+- **Full Boot Flow**: Boots Linux 6.x kernels via OpenSBI + FDT
+- **UART Console**: Dedicated host terminal (raw mode), instant key response, Ctrl-] x to exit
+- **Initrd Support**: Standalone cpio archive loading without kernel recompilation
+- **SBI Extensions**: Supports standard SBI extensions including TIME, IPI, RFENCE, DBCN, FWFT
+- **PLIC Interrupts**: UART provides interrupts via PLIC, `/dev/ttyS0` works properly
+- **Tested Kernel Version**: Linux 6.18.43 (rv32)
 
 ### Runtime & Debug
 - **4GB Memory Space**: Virtual page frame allocation with copy-on-write
@@ -82,42 +93,36 @@ make
 # Example: Load run.bin at 0x1000 (CLINT self-test)
 ./RISCVemu run.bin 0x1000
 
-# Start with the built-in debugger (temporarily disabled by default; build
-# with -DCONFIG_ENABLE_DEBUGGER=ON to make -d available)
+# Start with the built-in debugger (requires rebuild with -DCONFIG_ENABLE_DEBUGGER=ON)
 ./RISCVemu run.bin 0x1000 -d
 ```
 
-### Running OpenSBI + Kernel (OS Boot)
+### Booting Linux Kernel
 
-In `--console` mode the guest UART owns the host terminal (stdin/stdout) and
-all emulator log messages are dumped to a log file, so the terminal shows
-exactly what the guest console prints -- no interleaved host log lines.
+In `--console` mode the guest UART owns the host terminal (stdin/stdout) and all emulator log messages are dumped to a log file, so the terminal shows exactly what the guest console prints -- no interleaved host log lines.
 
-The host terminal is switched to **raw mode**: every keystroke is delivered to
-the guest immediately (no waiting for Enter, no canonical line buffering), the
-host does not echo anything, and control characters (e.g. Ctrl+C) are passed
-straight through to the guest -- the guest controls the screen entirely.  The
-16550 transmitter-empty interrupt (IER.ETBEI / IIR 0x02) is implemented, so the
-guest's interrupt-driven tty output drains correctly instead of stalling.  To
-leave console mode and quit the emulator, press **Ctrl-] then x** (the telnet
-escape convention).  The original terminal settings are restored automatically
-on exit.
+The host terminal is switched to **raw mode**: every keystroke is delivered to the guest immediately (no waiting for Enter, no canonical line buffering), the host does not echo anything, and control characters (e.g. Ctrl+C) are passed straight through to the guest -- the guest controls the screen entirely. To leave console mode and quit the emulator, press **Ctrl-] then x** (the telnet escape convention). The original terminal settings are restored automatically on exit.
 
 ```bash
 # Boot OpenSBI fw_jump with a kernel staged at 0x80400000 (UART console mode)
 ./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 \
     --console --log=riscvemu.log
+
+# Full boot with separate initrd
+./RISCVemu fw_jump.bin 0x80000000 --fdt --load Image@0x80400000 \
+    --initrd initrd.cpio.gz --console --log=riscvemu.log
 ```
 
 ### CMake Convenience Targets
 
 ```bash
-make run          # Run OpenSBI + kernel boot demo
-make run_sbi_debug # Same with debugger enabled
-make run_selftest # Run CLINT timer self-test
-make debug        # Run self-test in debug mode
-make build_tests  # Build riscv-tests
-make run_tests    # Run all tests
+make run            # Run OpenSBI + kernel boot demo
+make run_sbi_debug  # Same with debugger enabled
+make run_kernel     # Boot with real Linux kernel Image + initrd
+make run_selftest   # Run CLINT timer self-test
+make debug          # Run self-test in debug mode
+make build_tests    # Build riscv-tests
+make run_tests      # Run all tests
 ```
 
 ## 🔧 CLI Options
@@ -126,32 +131,34 @@ make run_tests    # Run all tests
 Usage: ./RISCVemu <program_file> <program_base> [options]
 Options:
   -L, --load FILE@HEX   Load an extra binary into RAM at the given address
-                         (repeatable; e.g., OpenSBI next-stage kernel).
+                        (repeatable; e.g., OpenSBI next-stage kernel).
   -R, --initrd FILE[@HEX]
-                         Load a separate initrd cpio archive into RAM
-                         (default address 0x82000000) and pass it to Linux via
-                         /chosen/linux,initrd-* in the FDT (requires --fdt).
-                         Use this instead of baking the initramfs into the
-                         kernel Image.
+                        Load a separate initrd cpio archive into RAM
+                        (default address 0x82000000) and pass it to Linux via
+                        /chosen/linux,initrd-* in the FDT (requires --fdt).
+                        Use this instead of baking the initramfs into the
+                        kernel Image.
   -C, --console         UART console mode: the guest console owns the host
-                         terminal (stdin/stdout), logger output is dumped to
-                         --log (default riscvemu.log), and the built-in
-                         debugger is disabled.  The host terminal switches to
-                         raw mode: keystrokes reach the guest immediately and
-                         are not echoed (the guest controls the screen).
-                         Press Ctrl-] then x to quit console mode.
+                        terminal (stdin/stdout), logger output is dumped to
+                        --log (default riscvemu.log), and the built-in
+                        debugger is disabled.  The host terminal switches to
+                        raw mode: keystrokes reach the guest immediately and
+                        are not echoed (the guest controls the screen).
+                        Press Ctrl-] then x to quit console mode.
   -l, --log FILE        Write logger output to FILE (truncated on open).
   -d, --debug           Enable single-step debug mode (needs a build with
-                         CONFIG_ENABLE_DEBUGGER=ON; temporarily disabled)
+                        CONFIG_ENABLE_DEBUGGER=ON).
   -b, --breakpoint      Set breakpoint address (hex format)
   -F, --fdt[=addr]      Build and hand a device tree to firmware in a1
-                         (a0=hartid 0); addr defaults to 0x87f00000
+                        (a0=hartid 0); addr defaults to 0x87f00000
   -h, --help            Show this help message
 
 Examples:
   ./RISCVemu test.bin 0x1000 -d -b 0x1200
   ./RISCVemu fw_jump.bin 0x80000000 --fdt --load kernel.bin@0x80400000 \
       --console --log=riscvemu.log
+  ./RISCVemu fw_jump.bin 0x80000000 --fdt --load Image@0x80400000 \
+      --initrd initrd.cpio.gz --console
 ```
 
 ## 🔧 Debugger Commands
@@ -196,6 +203,7 @@ RISCVemu/
 │   ├── device/             # Device emulation
 │   │   ├── clint.h         # CLINT timer
 │   │   ├── fdt.h           # Flattened Device Tree generator
+│   │   ├── plic.h          # PLIC interrupt controller
 │   │   └── uart.h          # 16550 UART
 │   └── extension/          # Extension instruction headers
 │       ├── a_extension.h
@@ -218,7 +226,8 @@ RISCVemu/
 │   ├── mem.c
 │   ├── device/
 │   │   ├── clint.c
-│   │   └── fdt.c
+│   │   ├── fdt.c
+│   │   └── plic.c          # PLIC implementation
 │   └── extension/
 │       ├── c_extension.c
 │       ├── f_extension.c
@@ -244,7 +253,7 @@ RISCVemu/
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `CONFIG_ENABLE_DEBUGGER` | OFF | Built-in debugger (`-d` flag); temporarily disabled |
+| `CONFIG_ENABLE_DEBUGGER` | OFF | Built-in debugger (`-d` flag) |
 | `CONFIG_SUPPORT_MISALIGN` | OFF | Support misaligned memory access (slower) |
 | `CONFIG_ENABLE_M_EXTENSION` | ON | M: Integer Multiplication/Division |
 | `CONFIG_ENABLE_A_EXTENSION` | ON | A: Atomic Operations |
@@ -258,6 +267,7 @@ RISCVemu/
 | `CONFIG_ENABLE_ZIFENCEI_EXTENSION` | ON | Zifencei: FENCE.I |
 | `CONFIG_ENABLE_ZICOND_EXTENSION` | ON | Zicond: Conditional Instructions |
 | `CONFIG_ENABLE_UART_DEVICE` | ON | 16550 UART at 0x10000000 |
+| `CONFIG_ENABLE_PLIC_DEVICE` | ON | PLIC interrupt controller at 0x0C000000 |
 | `CONFIG_ENABLE_FDT` | ON | Device Tree Blob generator |
 | `OPTIMIZE_FOR_SIZE` | OFF | Optimize for binary size (`-Os`) |
 | `ENABLE_LTO` | OFF | Link Time Optimization |
@@ -286,19 +296,35 @@ Run tests with `make run_tests`. Supported test suites:
 | `rv32mi-p-*` | Machine-mode | ✅ All passing |
 | `rv32si-p-*` | Supervisor-mode | ✅ All passing |
 
-Expected test output:
+### Linux Boot Status
+
+| Component | Status |
+|-----------|--------|
+| OpenSBI Boot | ✅ Working (v1.9-16) |
+| Linux 6.18.43 Kernel | ✅ Boots successfully |
+| UART Console | ✅ Working |
+| Initrd Loading | ✅ Working (cpio) |
+| PLIC Interrupts | ✅ Working |
+| SBI Extensions (TIME/IPI/RFENCE/DBCN/FWFT) | ✅ Supported |
+
+Expected output (Linux boot log):
 ```
-[rv32ui-p-add] ✅ PASS
-[rv32ui-p-addi] ✅ PASS
-[rv32uf-p-fadd] ✅ PASS
+OpenSBI v1.9-16-g337c23dd
 ...
+[    0.000000] Linux version 6.18.43 ...
+[    0.000000] Machine model: RISCVemu RV32 virt
+...
+BusyBox v1.38.0 built-in shell (ash)
+# ls
+bin   dev   etc   init  proc  root  sbin  sys   tmp   usr   var
 ```
 
 ## 🎯 Known Limitations
 
-- Flat binary format only (no direct ELF loading; use `objcopy -O binary`) (will be done soon!)
+- Flat binary format only (no direct ELF loading; use `objcopy -O binary`) (ELF support coming soon!)
+- RV32 only (RV64 support in development)
 - Portability: may not work on big-endian systems (DO NOT TOUCH THE MAGICAL DECODER! I've f**ked it and reverted thousands of times)
-- Performance: very slow if all extensions are enabled (maybe only 130MIPS) vs 270 MIPS if only "I" is enabled (maybe JIT?)
+- Performance: very slow if all extensions are enabled (maybe only 130MIPS) vs 270 MIPS if only "I" is enabled (maybe JIT later?)
 
 ## 🤝 Contributing
 
