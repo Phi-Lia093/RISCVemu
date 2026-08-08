@@ -543,7 +543,7 @@ fdt_build_uart(fdt_handle_t h)
  *   }
  */
 size_t
-fdt_build_riscvemu(uint32_t addr)
+fdt_build_riscvemu(uint32_t addr, uint32_t initrd_start, uint32_t initrd_end)
 {
     struct fdt_builder b;
     fdt_handle_t h;
@@ -582,6 +582,16 @@ fdt_build_riscvemu(uint32_t addr)
                      "earlycon console=ttyS0,115200n8 root=/dev/ram0 rw "
                      "rdinit=/init");
     if (!h) return 0;
+    /* A separate (non-packed) initrd: the kernel locates the cpio archive via
+     * these /chosen properties.  Two cells each, matching #address-cells=<2>.
+     * Pass 0/0 to omit the properties entirely (packed-initrd build). */
+    if (initrd_start && initrd_end)
+    {
+        h = fdt_prop_cells2(h, "linux,initrd-start", 0, initrd_start);
+        if (!h) return 0;
+        h = fdt_prop_cells2(h, "linux,initrd-end", 0, initrd_end);
+        if (!h) return 0;
+    }
     h = fdt_node_pop(h);
     if (!h) return 0;
 

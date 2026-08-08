@@ -37,6 +37,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 - **设备树 (FDT)**：为 OpenSBI/操作系统引导自动生成扁平设备树
 - **OpenSBI 集成**：在 `0x80000000` 引导 `fw_jump.bin`，并支持下一阶段内核加载
 - **多阶段二进制加载**：`--load FILE@HEX` 用于加载额外的二进制文件（如内核、initrd）
+- **独立 Initrd 支持**：`--initrd FILE[@HEX]` 将 cpio 归档加载到 RAM，并通过 FDT 的 `/chosen/linux,initrd-*` 传递给 Linux，无需将 initramfs 打包进内核 Image
 
 ### 运行时与调试
 - **4GB 内存空间**：采用写时复制策略的虚拟页帧分配
@@ -121,6 +122,11 @@ Usage: ./RISCVemu <program_file> <program_base> [options]
 Options:
   -L, --load FILE@HEX   将额外的二进制文件加载到 RAM 的指定地址
                         （可重复使用；例如 OpenSBI 的下一阶段内核）
+  -R, --initrd FILE[@HEX]
+                        加载独立的 initrd cpio 归档到 RAM（默认地址
+                        0x82000000），并通过 FDT 中的 /chosen/linux,initrd-*
+                        传递给 Linux（需要 --fdt）。用于代替把 initramfs
+                        打包进内核 Image 的做法
   -C, --console         UART 控制台模式：客户机控制台独占宿主终端
                         （stdin/stdout），日志输出转储到 --log（默认
                         riscvemu.log），并禁用内置调试器。宿主终端会切换

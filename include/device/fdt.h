@@ -181,10 +181,17 @@ fdt_handle_t fdt_mark_enabled(fdt_handle_t h);
  * into `g_state.main_memory` at `addr` (which must be a RAM location not
  * overlapped by the loaded firmware).  `addr` should be 8-byte aligned.
  *
+ * `initrd_start`/`initrd_end` describe a separate (non-packed) initrd loaded
+ * into RAM; when both are non-zero the /chosen node carries the standard
+ * `linux,initrd-start` / `linux,initrd-end` properties (two cells each, per
+ * the root #address-cells=<2>) so Linux unpacks the cpio archive.  Pass 0/0
+ * when there is no initrd.
+ *
  * Returns the number of bytes written, or 0 on error.  On success the FDT is
  * ready to hand to firmware via a1.
  */
-size_t fdt_build_riscvemu(uint32_t addr);
+size_t fdt_build_riscvemu(uint32_t addr, uint32_t initrd_start,
+                          uint32_t initrd_end);
 
 #endif /* CONFIG_ENABLE_FDT */
 

@@ -37,6 +37,7 @@ A pedagogical RISC-V instruction set simulator written in C23. Supports base int
 - **Device Tree (FDT)**: Auto-generated Flattened Device Tree for OpenSBI/OS boot
 - **OpenSBI Integration**: Boot `fw_jump.bin` at `0x80000000` with next-stage kernel staging
 - **Multi-stage Binary Loading**: `--load FILE@HEX` for loading additional binaries (e.g., kernel, initrd)
+- **Separate Initrd Support**: `--initrd FILE[@HEX]` loads a cpio archive into RAM and hands it to Linux via the FDT's `/chosen/linux,initrd-*`, so the initramfs need not be baked into the kernel Image
 
 ### Runtime & Debug
 - **4GB Memory Space**: Virtual page frame allocation with copy-on-write
@@ -126,6 +127,12 @@ Usage: ./RISCVemu <program_file> <program_base> [options]
 Options:
   -L, --load FILE@HEX   Load an extra binary into RAM at the given address
                          (repeatable; e.g., OpenSBI next-stage kernel).
+  -R, --initrd FILE[@HEX]
+                         Load a separate initrd cpio archive into RAM
+                         (default address 0x82000000) and pass it to Linux via
+                         /chosen/linux,initrd-* in the FDT (requires --fdt).
+                         Use this instead of baking the initramfs into the
+                         kernel Image.
   -C, --console         UART console mode: the guest console owns the host
                          terminal (stdin/stdout), logger output is dumped to
                          --log (default riscvemu.log), and the built-in

@@ -139,7 +139,7 @@ add_custom_target(run_selftest
 # Same OS-style boot with a real kernel Image; UART console mode as above.
 add_custom_target(run_kernel
     COMMAND ${PROJECT_NAME} fw_jump.bin 0x80000000 --fdt --load Image@0x80400000
-        --console --log=riscvemu.log
+        --console --log=riscvemu.log --initrd initrd.cpio.gz
     WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
     DEPENDS ${PROJECT_NAME} compile_run
     VERBATIM

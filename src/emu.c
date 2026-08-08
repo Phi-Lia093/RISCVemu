@@ -50,6 +50,10 @@
 
 struct machine_state g_state = { 0 }; // this will not fuck up addrs
 
+/* Default RAM address for a separate --initrd archive.  It sits well above
+ * the kernel Image (0x80400000 + ~21.5 MB) and below the FDT (0x87f00000). */
+#define INITRD_DEFAULT_ADDR 0x82000000u
+
 static void
 print_usage(const char *prog_name)
 {
@@ -59,6 +63,13 @@ print_usage(const char *prog_name)
             "  -L, --load FILE@HEX   Load an extra binary into RAM at the\n"
             "                        given address (repeatable; e.g. the\n"
             "                        OpenSBI next-stage kernel).\n"
+            "  -R, --initrd FILE[@HEX]\n"
+            "                        Load a separate initrd cpio archive into\n"
+            "                        RAM (default address 0x82000000) and pass\n"
+            "                        it to Linux via /chosen/linux,initrd-*\n"
+            "                        in the FDT (requires --fdt).  Use this\n"
+            "                        instead of baking the initramfs into the\n"
+            "                        kernel Image.\n"
             "  -C, --console         UART console mode: the guest console owns\n"
             "                        the host terminal (stdin/stdout), logger\n"
             "                        output is dumped to --log (default\n"
@@ -175,6 +186,10 @@ main(int argc, char **argv)
     int fdt_enabled = 0;
     uint32_t fdt_addr = FDT_DEFAULT_ADDR;
 #endif
+    /* Separate initrd (cpio archive) staged in RAM and announced to Linux via
+     * the /chosen node of the FDT (`--initrd FILE[@HEX]`). */
+    const char *initrd_file = NULL; /* --initrd FILE[@HEX] file part */
+    uint32_t initrd_addr = INITRD_DEFAULT_ADDR;
     uint32_t program_base;
     const char *program_name;
 
@@ -185,6 +200,7 @@ main(int argc, char **argv)
 
     static struct option long_options[]
         = { { "load", required_argument, 0, 'L' },
+            { "initrd", required_argument, 0, 'R' },
 #ifdef CONFIG_ENABLE_DEBUGGER
             { "debug", no_argument, 0, 'd' },
             { "breakpoint", required_argument, 0, 'b' },
@@ -198,10 +214,10 @@ main(int argc, char **argv)
             { 0, 0, 0, 0 } };
 
 #ifdef CONFIG_ENABLE_DEBUGGER
-    while ((opt = getopt_long(argc, argv, "LCdb:hl:", long_options, NULL))
+    while ((opt = getopt_long(argc, argv, "LCdb:hl:R:", long_options, NULL))
            != -1)
 #else
-    while ((opt = getopt_long(argc, argv, "LChl:", long_options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "LChl:R:", long_options, NULL)) != -1)
 #endif
     {
         switch (opt)
@@ -214,6 +230,42 @@ main(int argc, char **argv)
                 return 1;
             }
             break;
+
+        case 'R':
+        {
+            /* --initrd FILE[@HEX]: the address part is optional (defaults to
+             * INITRD_DEFAULT_ADDR).  The file part is validated when it is
+             * mapped later, alongside the overlap checks. */
+            const char *at = strrchr(optarg, '@');
+            if (at)
+            {
+                if (at == optarg || *(at + 1) == '\0')
+                {
+                    fprintf(stderr,
+                            "Error: --initrd expects FILE[@HEX], got \"%s\"\n",
+                            optarg);
+                    return 1;
+                }
+                if (parse_hex(at + 1, &initrd_addr) != 0)
+                {
+                    fprintf(stderr,
+                            "Error: invalid address in --initrd \"%s\"\n",
+                            optarg);
+                    return 1;
+                }
+                initrd_file = strndup(optarg, (size_t)(at - optarg));
+            }
+            else
+            {
+                initrd_file = strdup(optarg);
+            }
+            if (!initrd_file)
+            {
+                perror("strdup");
+                return 1;
+            }
+            break;
+        }
 
         case 'C':
             console_mode = 1;
@@ -339,6 +391,38 @@ main(int argc, char **argv)
     // device tree address/size are known so overlaps can be rejected (see
     // the `--load` block after the FDT section).
 
+    // A separate initrd (cpio archive) is staged in RAM at `initrd_addr`
+    // (--initrd FILE[@HEX]) and announced to Linux through the /chosen node of
+    // the FDT, so the kernel can unpack it without it being baked into the
+    // Image.  The file is mapped here (before the FDT build, whose /chosen
+    // properties need the end address) and copied into RAM after the FDT's
+    // footprint is known, so overlaps can be rejected.
+    uint32_t initrd_start = 0, initrd_end = 0;
+    uint8_t *initrd_map = NULL;
+    size_t initrd_len = 0;
+    if (initrd_file)
+    {
+        initrd_map = (uint8_t *)map_file(initrd_file, &initrd_len,
+                                         PROT_READ | PROT_WRITE);
+        if (!initrd_map)
+        {
+            fatal("failed to load --initrd file: %s", initrd_file);
+        }
+        if (initrd_len > MEM_SIZE || initrd_addr > MEM_SIZE - initrd_len)
+        {
+            fatal("initrd too large for memory (base=0x%x, size=%zu, "
+                  "max=0x%x)",
+                  initrd_addr, initrd_len, MEM_SIZE);
+            munmap(initrd_map, initrd_len);
+            terminate_logger();
+            return 1;
+        }
+        initrd_start = initrd_addr;
+        initrd_end = initrd_addr + (uint32_t)initrd_len;
+        info("--initrd %s: %zu bytes staged at 0x%x-0x%x", initrd_file,
+             initrd_len, initrd_start, initrd_end);
+    }
+
 #ifdef CONFIG_ENABLE_FDT
     // OpenSBI and OS bootloaders expect a flattened device tree handed in a1
     // (and the boot HART id in a0).  This is opt-in via `--fdt[=addr]` because
@@ -348,7 +432,7 @@ main(int argc, char **argv)
     size_t fdt_size = 0;
     if (fdt_enabled)
     {
-        fdt_size = fdt_build_riscvemu(fdt_addr);
+        fdt_size = fdt_build_riscvemu(fdt_addr, initrd_start, initrd_end);
         if (fdt_size == 0)
         {
             fatal("failed to build device tree at 0x%x", fdt_addr);
@@ -363,6 +447,29 @@ main(int argc, char **argv)
              fdt_addr);
     }
 #endif
+
+    // Now that the FDT footprint is fixed, place the initrd in RAM, checking
+    // it against the device tree and the loaded program.
+    if (initrd_map)
+    {
+#ifdef CONFIG_ENABLE_FDT
+        if (fdt_enabled && initrd_start < fdt_addr + fdt_size
+            && fdt_addr < initrd_end)
+        {
+            fatal("initrd at 0x%x-0x%x overlaps the device tree at 0x%x",
+                  initrd_start, initrd_end, fdt_addr);
+        }
+#endif
+        if (initrd_start < program_base + len && program_base < initrd_end)
+        {
+            fatal("initrd at 0x%x-0x%x overlaps the loaded program",
+                  initrd_start, initrd_end);
+        }
+        memcpy(g_state.main_memory + initrd_start, initrd_map, initrd_len);
+        munmap(initrd_map, initrd_len);
+        initrd_map = NULL;
+        info("initrd copied to 0x%x-0x%x", initrd_start, initrd_end);
+    }
 
     // Stage any extra (e.g. OpenSBI next-stage) binaries.  Each is placed at
     // its requested address; nothing here assumes a particular layout, so any
@@ -403,6 +510,8 @@ main(int argc, char **argv)
     }
     free_extra_slots(extra_slots, extra_count);
     extra_slots = NULL;
+    free((void *)initrd_file);
+    initrd_file = NULL;
 
 #ifdef CONFIG_ENABLE_DEBUGGER
     /* --console bypasses the built-in debugger: no SIGINT interception and no
